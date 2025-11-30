@@ -12,6 +12,7 @@ export type Theme = {
     muted: ColorValue;
     border: ColorValue;
     error: ColorValue;
+    errorBackground: ColorValue; // Added safe error background color
     card: ColorValue;
     inputBackground: ColorValue;
     shadowColor: ColorValue;
@@ -29,6 +30,7 @@ export const lightTheme: Theme = {
     muted: '#6c757d',
     border: '#e9ecef',
     error: '#dc3545',
+    errorBackground: '#f8d7da', // Default bootstrap error bg
     card: '#ffffff',
     inputBackground: '#ffffff',
     shadowColor: '#000'
@@ -46,6 +48,7 @@ export const darkTheme: Theme = {
     muted: '#9aa6b2',
     border: '#1f2933',
     error: '#ff6b6b',
+    errorBackground: 'rgba(255, 107, 107, 0.1)', // Safe dark mode error bg
     card: '#0b1220',
     inputBackground: '#091022',
     shadowColor: '#000'
