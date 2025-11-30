@@ -1,0 +1,22 @@
+Sample import data for clipboard test:
+
+#	NAME	Share	Cell	Level
+1	Bill Tauriello	TQ	(908) 304-2902	3
+2	Bill Taylor	TQ	(908) 217-2116	3.5
+3	Bob Alexander	TQ	(908) 507-7500	3
+4	Claus Nussgruber	F	(908) 577-4273	4
+5	Doug King	F	(908) 586-3385	3
+6	Godehard Rau	F	(908) 872-0433	4
+7	Norm Goldberg	TQ	(908) 268-7951	3
+8	Pierce Butler	F	(908) 500-4213	3.5
+9	Serban Vasile	F	(908) 528-7696	4
+10	Goran Mecevic	F	(908) 619-4475	4.25
+11	George Walchuk	OT	(908) 892-4833	4
+12	Klaus Tum	H	(908) 392-2379	3.5
+13	Sudhakar Rao	TQ	(908) 625-5023	4
+14	Tom Powers	TQ	(908) 329-7532	3.75
+15	Adrian Turcu	OT	(908) 812-2100	4
+16	Matt Farber	R	(908) 310-0187	3.75
+17	Bill Smallwood	R	(908) 507-7440	3.75
+18	Mark Donnelly	R	(908) 892-8428	3.75
+19	Don Rowe	R	(908) 303-1793	3.75

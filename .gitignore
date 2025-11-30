@@ -1,0 +1,21 @@
+# Node modules
+Code/frontend/node_modules/*
+Code/backend/node_modules/*
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+
+# Environment files
+.env
+
+# Misc
+*.tmp
+*.swp

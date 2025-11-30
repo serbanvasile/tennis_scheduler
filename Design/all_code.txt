@@ -1,0 +1,614 @@
+// =============================================
+// tennis-scheduler-expo-starter (FIXED)
+// =============================================
+// IMPORTANT: Create the following files in your project.
+// Do NOT paste this whole document into a single file.
+// The original error `SyntaxError: /: Missing semicolon. (11:8)`
+// happened because JSON (package.json) was pasted into a TS/JS file.
+//
+// Project tree:
+//  package.json
+//  tsconfig.json
+//  babel.config.js
+//  App.tsx
+//  src/types.ts
+//  src/store.ts
+//  src/matchmaker.ts
+//  src/components/MatchCard.tsx
+//  src/components/CourtColumn.tsx
+//  src/__tests__/matchmaker.test.ts
+//
+// After creating files, run:
+//   npm install
+//   npm test     # runs unit tests
+//   npm start    # launches Expo
+
+
+// -------------------------------
+// FILE: package.json
+// -------------------------------
+{
+  "name": "tennis-scheduler-expo-starter",
+  "version": "0.1.1",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "test": "jest",
+    "lint": "eslint . || true"
+  },
+  "dependencies": {
+    "expo": "~51.0.0",
+    "expo-status-bar": "~1.12.1",
+    "react": "18.2.0",
+    "react-native": "0.74.3",
+    "@react-navigation/native": "^6.1.17",
+    "@react-navigation/native-stack": "^6.9.26",
+    "@react-navigation/bottom-tabs": "^6.5.20",
+    "react-native-gesture-handler": "~2.16.1",
+    "react-native-reanimated": "~3.10.1",
+    "zustand": "^4.5.2",
+    "seedrandom": "^3.0.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "typescript": "^5.4.0",
+    "jest": "^29.7.0",
+    "jest-expo": "^51.0.0",
+    "@types/jest": "^29.5.11"
+  },
+  "jest": {
+    "preset": "jest-expo"
+  }
+}
+
+
+// -------------------------------
+// FILE: tsconfig.json
+// -------------------------------
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": "."
+  }
+}
+
+
+// -------------------------------
+// FILE: babel.config.js
+// -------------------------------
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ["babel-preset-expo"],
+    plugins: [
+      // Reanimated plugin MUST be last
+      "react-native-reanimated/plugin"
+    ]
+  };
+};
+
+
+// -------------------------------
+// FILE: src/types.ts
+// -------------------------------
+export type DID = string;
+
+export type Court = { id: string; label: string; timeSlots: string[] };
+
+export type Rules = {
+  balanceWeights: {
+    partners: number;
+    opponents: number;
+    courts: number;
+    sitouts: number;
+    skillParity: number;
+  };
+};
+
+export type League = {
+  id: string;
+  name: string;
+  courts: Court[];
+  rules: Rules;
+  adminDIDs: DID[];
+};
+
+export type Player = {
+  id: DID;
+  displayName: string;
+  skill: number; // 1..10
+};
+
+export type Week = {
+  id: string;
+  index: number;
+  dateISO: string;
+  status: "draft" | "published" | "completed" | "cancelled";
+};
+
+export type Availability = {
+  weekId: string;
+  playerId: DID;
+  state: "yes" | "no" | "maybe";
+};
+
+export type Match = {
+  id: string;
+  weekId: string;
+  courtId: string;
+  timeSlot: string;
+  teamA: DID[];
+  teamB: DID[];
+};
+
+
+// -------------------------------
+// FILE: src/store.ts
+// -------------------------------
+import { create } from "zustand";
+import type { League, Player, Week, Availability, Match, Court } from "./types";
+
+// Small deterministic ID helper
+const id = () => Math.random().toString(36).slice(2);
+
+export type RootState = {
+  league: League;
+  roster: Player[];
+  weeks: Week[];
+  availability: Availability[]; // per week
+  matches: Match[];
+  setAvailability: (
+    weekId: string,
+    playerId: string,
+    state: Availability["state"]
+  ) => void;
+  generateWeek: (weekIndex: number) => string; // returns weekId
+  makeSchedule: (weekId: string) => void;
+};
+
+// Demo seed data (can be replaced by P2P/CRDT layer later)
+const demoCourts: Court[] = [
+  { id: "c1", label: "Court 1", timeSlots: ["18:00", "19:15"] },
+  { id: "c2", label: "Court 2", timeSlots: ["18:00", "19:15"] },
+  { id: "c3", label: "Court 3", timeSlots: ["18:00", "19:15"] }
+];
+
+const demoPlayers: Player[] = [
+  { id: "p1", displayName: "Bill Tauriello", skill: 7 },
+  { id: "p2", displayName: "Bill Taylor", skill: 6 },
+  { id: "p3", displayName: "Bob Alexander", skill: 5 },
+  { id: "p4", displayName: "Claus Nussguber", skill: 7 },
+  { id: "p5", displayName: "Doug King", skill: 8 },
+  { id: "p6", displayName: "Godehard Rau", skill: 8 },
+  { id: "p7", displayName: "Norm Goldberg", skill: 6 },
+  { id: "p8", displayName: "Pierce Butler", skill: 5 },
+  { id: "p9", displayName: "Serban Vasile", skill: 7 },
+  { id: "p10", displayName: "Goran Mecovic", skill: 6 },
+  { id: "p11", displayName: "George Walchuk", skill: 6 },
+  { id: "p12", displayName: "Klaus Tum", skill: 5 }
+];
+
+export const useStore = create<RootState>((set, get) => ({
+  league: {
+    id: "league1",
+    name: "Thursday Doubles",
+    courts: demoCourts,
+    rules: {
+      balanceWeights: {
+        partners: 3,
+        opponents: 2,
+        courts: 1,
+        sitouts: 4,
+        skillParity: 5
+      }
+    },
+    adminDIDs: ["admin"]
+  },
+  roster: demoPlayers,
+  weeks: [],
+  availability: [],
+  matches: [],
+
+  setAvailability: (weekId, playerId, state) =>
+    set((s) => {
+      const existing = s.availability.find(
+        (a) => a.weekId === weekId && a.playerId === playerId
+      );
+      if (existing) existing.state = state;
+      else s.availability.push({ weekId, playerId, state });
+      return { availability: [...s.availability] };
+    }),
+
+  generateWeek: (weekIndex) => {
+    const date = new Date();
+    const weekDate = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate() + 7 * weekIndex
+    );
+    const weekId = `w${id()}`;
+    set((s) => ({
+      weeks: [
+        ...s.weeks,
+        {
+          id: weekId,
+          index: weekIndex,
+          dateISO: weekDate.toISOString(),
+          status: "draft"
+        }
+      ]
+    }));
+    // default everyone as maybe
+    const av = get().roster.map((p) => ({
+      weekId,
+      playerId: p.id,
+      state: "maybe" as const
+    }));
+    set((s) => ({ availability: [...s.availability, ...av] }));
+    return weekId;
+  },
+
+  makeSchedule: (weekId) => {
+    const { roster, availability, league } = get();
+    const yesPlayers = availability
+      .filter(
+        (a) => a.weekId === weekId && (a.state === "yes" || a.state === "maybe")
+      ) // for demo treat maybe as yes
+      .map((a) => roster.find((p) => p.id === a.playerId)!)
+      .filter(Boolean) as Player[];
+
+    // naive deterministic pairing by skill proximity, then fill courts
+    const sorted = [...yesPlayers].sort((a, b) => a.skill - b.skill);
+    const pairs: string[][] = [];
+    for (let i = 0; i + 1 < sorted.length; i += 2)
+      pairs.push([sorted[i].id, sorted[i + 1].id]);
+
+    const matches: Match[] = [];
+    let pairIdx = 0;
+    for (const court of league.courts) {
+      for (const t of court.timeSlots) {
+        if (pairIdx + 1 >= pairs.length) break;
+        const teamA = pairs[pairIdx++];
+        const teamB = pairs[pairIdx++];
+        matches.push({
+          id: `m${id()}`,
+          weekId,
+          courtId: court.id,
+          timeSlot: t,
+          teamA,
+          teamB
+        });
+      }
+    }
+    set({ matches });
+  }
+}));
+
+
+// -------------------------------
+// FILE: src/matchmaker.ts
+// -------------------------------
+import type { Player, Match, Court } from "./types";
+
+export function greedyPairs(players: Player[]): string[][] {
+  const s = [...players].sort((a, b) => a.skill - b.skill);
+  const out: string[][] = [];
+  for (let i = 0; i + 1 < s.length; i += 2) out.push([s[i].id, s[i + 1].id]);
+  return out;
+}
+
+export function makeMatches(
+  weekId: string,
+  pairs: string[][],
+  courts: Court[]
+): Match[] {
+  const matches: Match[] = [];
+  let idx = 0;
+  for (const c of courts) {
+    for (const t of c.timeSlots) {
+      if (idx + 1 >= pairs.length) break;
+      matches.push({
+        id: `${weekId}-${c.id}-${t}`,
+        weekId,
+        courtId: c.id,
+        timeSlot: t,
+        teamA: pairs[idx++],
+        teamB: pairs[idx++]
+      });
+    }
+  }
+  return matches;
+}
+
+
+// -------------------------------
+// FILE: src/components/MatchCard.tsx
+// -------------------------------
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import type { Match } from "../types";
+import { useStore } from "../store";
+
+export const MatchCard: React.FC<{ match: Match }> = ({ match }) => {
+  const roster = useStore((s) => s.roster);
+  const name = (pid: string) =>
+    roster.find((p) => p.id === pid)?.displayName || pid;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.time}>{match.timeSlot}</Text>
+      <View style={styles.row}>
+        <Text numberOfLines={1}>{name(match.teamA[0])}</Text>
+        <Text> & </Text>
+        <Text numberOfLines={1}>{name(match.teamA[1])}</Text>
+      </View>
+      <Text style={styles.vs}>vs</Text>
+      <View style={styles.row}>
+        <Text numberOfLines={1}>{name(match.teamB[0])}</Text>
+        <Text> & </Text>
+        <Text numberOfLines={1}>{name(match.teamB[1])}</Text>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  time: { fontWeight: "600", marginBottom: 6 },
+  row: { flexDirection: "row", flexWrap: "nowrap" },
+  vs: { textAlign: "center", marginVertical: 4, opacity: 0.6 }
+});
+
+
+// -------------------------------
+// FILE: src/components/CourtColumn.tsx
+// -------------------------------
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { useStore } from "../store";
+import type { Match } from "../types";
+import { MatchCard } from "./MatchCard";
+
+export const CourtColumn: React.FC<{ courtId: string; label: string }> = ({
+  courtId,
+  label
+}) => {
+  const matches = useStore((s) => s.matches.filter((m) => m.courtId === courtId));
+  return (
+    <View style={styles.col}>
+      <Text style={styles.header}>{label}</Text>
+      {matches.length === 0 && <Text style={{ opacity: 0.6 }}>No matches yet</Text>}
+      {matches.map((m: Match) => (
+        <MatchCard key={m.id} match={m} />
+      ))}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  col: { flex: 1, padding: 8 },
+  header: { fontWeight: "700", marginBottom: 8 }
+});
+
+
+// -------------------------------
+// FILE: App.tsx
+// -------------------------------
+import React, { useMemo } from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {
+  View,
+  Text,
+  Button,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView
+} from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { useStore } from "./src/store";
+import type { Week } from "./src/types";
+import { CourtColumn } from "./src/components/CourtColumn";
+
+const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+function DashboardScreen() {
+  const weeks = useStore((s) => s.weeks);
+  const league = useStore((s) => s.league);
+  const generateWeek = useStore((s) => s.generateWeek);
+  const latest = weeks[weeks.length - 1];
+  return (
+    <SafeAreaView style={{ flex: 1, padding: 16 }}>
+      <Text style={styles.title}>{league.name}</Text>
+      <Text style={{ marginBottom: 12 }}>Weeks created: {weeks.length}</Text>
+      <Button title="Create Next Week" onPress={() => generateWeek(weeks.length)} />
+      {latest && (
+        <Text style={{ marginTop: 16 }}>
+          Last week: {new Date(latest.dateISO).toDateString()}
+        </Text>
+      )}
+      <StatusBar style="auto" />
+    </SafeAreaView>
+  );
+}
+
+function WeeksListScreen({ navigation }: any) {
+  const weeks = useStore((s) => s.weeks);
+  return (
+    <SafeAreaView style={{ flex: 1 }}>
+      <FlatList
+        data={weeks}
+        keyExtractor={(w: Week) => w.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() => navigation.navigate("WeekDetail", { id: item.id })}
+          >
+            <Text style={styles.itemTitle}>
+              Week {item.index + 1} — {new Date(item.dateISO).toDateString()}
+            </Text>
+            <Text style={{ opacity: 0.6 }}>{item.status}</Text>
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={
+          <Text style={{ padding: 16 }}>
+            No weeks yet. Create one from Dashboard.
+          </Text>
+        }
+      />
+    </SafeAreaView>
+  );
+}
+
+function WeekDetailScreen({ route }: any) {
+  const { id } = route.params;
+  const league = useStore((s) => s.league);
+  const makeSchedule = useStore((s) => s.makeSchedule);
+  const matches = useStore((s) => s.matches.filter((m) => m.weekId === id));
+  const generateIfEmpty = () => {
+    if (matches.length === 0) makeSchedule(id);
+  };
+
+  const columns = useMemo(
+    () => league.courts.map((c) => <CourtColumn key={c.id} courtId={c.id} label={c.label} />),
+    [league.courts, matches.length]
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, padding: 8 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8
+        }}
+      >
+        <Text style={styles.title}>Schedule</Text>
+        <Button
+          title={matches.length === 0 ? "Generate" : "Regenerate"}
+          onPress={generateIfEmpty}
+        />
+      </View>
+      <View style={{ flexDirection: "row" }}>{columns}</View>
+    </SafeAreaView>
+  );
+}
+
+function WeeksStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="WeeksList" component={WeeksListScreen} options={{ title: "Weeks" }} />
+      <Stack.Screen name="WeekDetail" component={WeekDetailScreen} options={{ title: "Week Detail" }} />
+    </Stack.Navigator>
+  );
+}
+
+function RosterScreen() {
+  const roster = useStore((s) => s.roster);
+  return (
+    <SafeAreaView style={{ flex: 1 }}>
+      <FlatList
+        data={roster}
+        keyExtractor={(p) => p.id}
+        renderItem={({ item }) => (
+          <View style={styles.item}>
+            <Text style={styles.itemTitle}>{item.displayName}</Text>
+            <Text>Skill {item.skill}</Text>
+          </View>
+        )}
+      />
+    </SafeAreaView>
+  );
+}
+
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Tab.Navigator>
+        <Tab.Screen name="Dashboard" component={DashboardScreen} />
+        <Tab.Screen name="Weeks" component={WeeksStack} options={{ headerShown: false }} />
+        <Tab.Screen name="Roster" component={RosterScreen} />
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
+}
+
+const styles = StyleSheet.create({
+  title: { fontSize: 20, fontWeight: "700" },
+  item: {
+    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#ddd"
+  },
+  itemTitle: { fontWeight: "600", marginBottom: 4 }
+});
+
+
+// -------------------------------
+// FILE: src/__tests__/matchmaker.test.ts
+// -------------------------------
+import { greedyPairs, makeMatches } from "../matchmaker";
+import type { Player, Court } from "../types";
+
+test("greedyPairs pairs adjacent-by-skill players", () => {
+  const players: Player[] = [
+    { id: "a", displayName: "A", skill: 1 },
+    { id: "b", displayName: "B", skill: 2 },
+    { id: "c", displayName: "C", skill: 3 },
+    { id: "d", displayName: "D", skill: 4 }
+  ];
+  const pairs = greedyPairs(players);
+  expect(pairs).toEqual([
+    ["a", "b"],
+    ["c", "d"]
+  ]);
+});
+
+test("makeMatches fills courts and times in order", () => {
+  const courts: Court[] = [
+    { id: "c1", label: "C1", timeSlots: ["18:00", "19:15"] },
+    { id: "c2", label: "C2", timeSlots: ["18:00"] }
+  ];
+  const pairs = [["a", "b"], ["c", "d"], ["e", "f"], ["g", "h"]];
+  const matches = makeMatches("w1", pairs, courts);
+  // Expect 3 matches (2 on c1, 1 on c2)
+  expect(matches.length).toBe(3);
+  expect(matches[0].courtId).toBe("c1");
+  expect(matches[1].courtId).toBe("c1");
+  expect(matches[2].courtId).toBe("c2");
+});
+
+
+// -------------------------------
+// README (quick start)
+// -------------------------------
+// 1) Ensure Node 18+ and the Expo CLI (npx is fine).
+// 2) Create the files EXACTLY as above.
+// 3) Run: npm install
+// 4) Run unit tests: npm test (should pass 2 tests)
+// 5) Start app: npm start
+// 6) In the app:
+//    - Dashboard → "Create Next Week" to add a week.
+//    - Weeks → select the week → "Generate" to auto-build doubles schedule.
+//
+// Question for you:
+//  - For MAYBE availability, should those players be auto-included (current demo) or excluded unless the captain overrides?
+//  - When courts/time slots overflow the number of pairs, should extras be auto-marked as sit-outs or offered to a sub pool?
+// Answer and I’ll implement the expected behavior next.
