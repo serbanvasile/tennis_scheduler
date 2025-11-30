@@ -15,6 +15,7 @@ import {
 import { Player } from '../types';
 import { databaseService } from '../database/sqlite-service';
 import { ImportScreen } from './ImportScreen';
+import { useTheme } from '../ui/theme';
 
 const SKILL_LEVELS = [3, 3.5, 3.75, 4, 4.25, 4.5, 5, 5.5, 6];
 
@@ -319,6 +320,7 @@ export default function RosterScreen() {
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [showImportScreen, setShowImportScreen] = useState(false);
+  const { theme } = useTheme();
 
   useEffect(() => {
     initializeAndLoad();
@@ -518,9 +520,9 @@ export default function RosterScreen() {
   // Show loading state during initialization
   if (!initialized && loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.centered}>
-          <Text style={styles.loadingText}>Initializing database...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.muted }]}>Initializing database...</Text>
         </View>
       </SafeAreaView>
     );
@@ -529,11 +531,11 @@ export default function RosterScreen() {
   // Show error state if initialization failed
   if (error && !initialized) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.centered}>
-          <Text style={styles.errorText}>Database Error</Text>
-          <Text style={styles.errorDetail}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={initializeAndLoad}>
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>Database Error</Text>
+          <Text style={[styles.errorDetail, { color: theme.colors.muted }]}>{error}</Text>
+          <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.colors.primary }]} onPress={initializeAndLoad}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -542,30 +544,30 @@ export default function RosterScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Tennis Roster</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Tennis Roster</Text>
         <View style={styles.headerButtons}>
-          <TouchableOpacity style={styles.clearAllButton} onPress={handleClearAllPlayers}>
+          <TouchableOpacity style={[styles.clearAllButton, { backgroundColor: theme.colors.error }]} onPress={handleClearAllPlayers}>
             <Text style={styles.clearAllButtonText}>Clear All</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.importButton} onPress={() => setShowImportScreen(true)}>
+          <TouchableOpacity style={[styles.importButton, { backgroundColor: theme.colors.accent }]} onPress={() => setShowImportScreen(true)}>
             <Text style={styles.importButtonText}>Import</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton} onPress={handleAddPlayer}>
+          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={handleAddPlayer}>
             <Text style={styles.addButtonText}>+ Add</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.statsRow}>
-        <Text style={styles.statsText}>{players.length} players</Text>
-        <Text style={styles.statsText}>
+      <View style={[styles.statsRow, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.statsText, { color: theme.colors.muted }]}>{players.length} players</Text>
+        <Text style={[styles.statsText, { color: theme.colors.muted }]}> 
           Avg skill: {players.length > 0 ? (players.reduce((sum: number, p: Player) => sum + p.skill, 0) / players.length).toFixed(1) : '0.0'}
         </Text>
-        {loading && <Text style={styles.loadingIndicator}>Syncing...</Text>}
+        {loading && <Text style={[styles.loadingIndicator, { color: theme.colors.muted }]}>Syncing...</Text>}
         {!loading && players.length === 0 && !error && (
-          <Text style={styles.emptyStateText}>No players in roster. Use Import or Add to get started.</Text>
+          <Text style={[styles.emptyStateText, { color: theme.colors.muted }]}>No players in roster. Use Import or Add to get started.</Text>
         )}
       </View>
 
@@ -598,34 +600,36 @@ export default function RosterScreen() {
 
       {showImportScreen && (
         <Modal visible={showImportScreen} animationType="slide" presentationStyle="fullScreen">
-          <ImportScreen
-            onBack={async () => {
-              console.log('🔄 Returning from Import screen, refreshing roster...');
-              setShowImportScreen(false);
-              setLoading(true);
-              try {
-                await loadPlayers(); // Refresh when returning from import
-                console.log('🔄 Roster refreshed after returning from import');
-              } catch (error) {
-                console.error('💥 Failed to refresh after returning from import:', error);
-              } finally {
-                setLoading(false);
-              }
-            }}
-            onImportComplete={async () => {
-              console.log('🔄 Import completed, refreshing roster...');
-              setShowImportScreen(false);
-              setLoading(true);
-              try {
-                await loadPlayers(); // Refresh the roster after import
-                console.log('🔄 Roster refreshed after import');
-              } catch (error) {
-                console.error('💥 Failed to refresh after import:', error);
-              } finally {
-                setLoading(false);
-              }
-            }}
-          />
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.surface }}>
+            <ImportScreen
+              onBack={async () => {
+                console.log('🔄 Returning from Import screen, refreshing roster...');
+                setShowImportScreen(false);
+                setLoading(true);
+                try {
+                  await loadPlayers(); // Refresh when returning from import
+                  console.log('🔄 Roster refreshed after returning from import');
+                } catch (error) {
+                  console.error('💥 Failed to refresh after returning from import:', error);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              onImportComplete={async () => {
+                console.log('🔄 Import completed, refreshing roster...');
+                setShowImportScreen(false);
+                setLoading(true);
+                try {
+                  await loadPlayers(); // Refresh the roster after import
+                  console.log('🔄 Roster refreshed after import');
+                } catch (error) {
+                  console.error('💥 Failed to refresh after import:', error);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            />
+          </SafeAreaView>
         </Modal>
       )}
     </SafeAreaView>
@@ -775,10 +779,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  cancelButton: {
-    color: '#007bff',
-    fontSize: 16,
-  },
   headerCancelButton: {
     backgroundColor: '#6c757d',
     paddingHorizontal: 16,
@@ -800,11 +800,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
-  },
-  saveButton: {
-    color: '#007bff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   modalContent: {
     flex: 1,

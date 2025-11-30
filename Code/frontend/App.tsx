@@ -12,6 +12,7 @@ import {
   SafeAreaView
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { ThemeProvider, useTheme } from "./src/ui/theme";
 import { useStore } from "./src/store";
 import type { Week } from "./src/types";
 import { CourtColumn } from "./src/components/CourtColumn";
@@ -22,19 +23,48 @@ import CalendarScreen from "./src/components/CalendarScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function DashboardScreen() {
+function DashboardScreen({ navigation }: any) {
+  const { theme, setThemeName } = useTheme();
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => setThemeName(theme.name === 'light' ? 'dark' : 'light')}
+          style={{
+            padding: 6,
+            borderRadius: 16,
+            marginRight: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'transparent'
+          }}
+          accessibilityLabel="Toggle theme"
+        >
+          <Text style={{ fontSize: 18, color: theme.colors.text }}>{theme.name === 'light' ? '🌙' : '☀️'}</Text>
+        </TouchableOpacity>
+      ),
+      headerStyle: { backgroundColor: theme.colors.surface },
+      headerTintColor: theme.colors.text,
+      headerRightContainerStyle: { paddingRight: 8 }
+    });
+  }, [navigation, theme.name]);
   const weeks = useStore((s) => s.weeks);
   const league = useStore((s) => s.league);
   const generateWeek = useStore((s) => s.generateWeek);
   const latest = weeks[weeks.length - 1];
   
   return (
-    <SafeAreaView style={{ flex: 1, padding: 16 }}>
-      <Text style={styles.title}>{league.name}</Text>
+    <SafeAreaView style={{ flex: 1, padding: 16, backgroundColor: theme.colors.background }}>
+      <Text style={[styles.title, { color: theme.colors.text }]}>{league.name}</Text>
       <Text style={{ marginBottom: 12 }}>Weeks created: {weeks.length}</Text>
       <Button 
         title="Create Next Week" 
         onPress={() => generateWeek(weeks.length)} 
+      />
+      <View style={{ height: 12 }} />
+      <Button
+        title={theme.name === 'light' ? 'Switch to Dark' : 'Switch to Light'}
+        onPress={() => setThemeName(theme.name === 'light' ? 'dark' : 'light')}
       />
       {latest && (
         <Text style={{ marginTop: 16 }}>
@@ -121,14 +151,16 @@ function WeeksStack() {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Tab.Navigator>
-        <Tab.Screen name="Dashboard" component={DashboardScreen} />
-        <Tab.Screen name="Calendar" component={CalendarScreen} />
-        <Tab.Screen name="Roster" component={RosterScreen} />
-        <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-      </Tab.Navigator>
-    </NavigationContainer>
+    <ThemeProvider>
+      <NavigationContainer>
+        <Tab.Navigator>
+          <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: true }} />
+          <Tab.Screen name="Calendar" component={CalendarScreen} />
+          <Tab.Screen name="Roster" component={RosterScreen} />
+          <Tab.Screen name="Analytics" component={AnalyticsScreen} />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </ThemeProvider>
   );
 }
 
