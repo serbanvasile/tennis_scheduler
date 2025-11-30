@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {
@@ -56,7 +56,7 @@ function DashboardScreen({ navigation }: any) {
   return (
     <SafeAreaView style={{ flex: 1, padding: 16, backgroundColor: theme.colors.background }}>
       <Text style={[styles.title, { color: theme.colors.text }]}>{league.name}</Text>
-      <Text style={{ marginBottom: 12 }}>Weeks created: {weeks.length}</Text>
+      <Text style={{ marginBottom: 12, color: theme.colors.text }}>Weeks created: {weeks.length}</Text>
       <Button 
         title="Create Next Week" 
         onPress={() => generateWeek(weeks.length)} 
@@ -67,35 +67,37 @@ function DashboardScreen({ navigation }: any) {
         onPress={() => setThemeName(theme.name === 'light' ? 'dark' : 'light')}
       />
       {latest && (
-        <Text style={{ marginTop: 16 }}>
+        <Text style={{ marginTop: 16, color: theme.colors.text }}>
           Last week: {new Date(latest.dateISO).toDateString()}
         </Text>
       )}
-      <StatusBar style="auto" />
+      <StatusBar style={theme.name === 'dark' ? "light" : "dark"} />
     </SafeAreaView>
   );
 }
 
 function WeeksListScreen({ navigation }: any) {
   const weeks = useStore((s) => s.weeks);
+  const { theme } = useTheme();
+
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <FlatList
         data={weeks}
         keyExtractor={(w: Week) => w.id}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.item}
+            style={[styles.item, { borderBottomColor: theme.colors.border }]}
             onPress={() => navigation.navigate("WeekDetail", { id: item.id })}
           >
-            <Text style={styles.itemTitle}>
+            <Text style={[styles.itemTitle, { color: theme.colors.text }]}>
               Week {item.index + 1} — {new Date(item.dateISO).toDateString()}
             </Text>
-            <Text style={{ opacity: 0.6 }}>{item.status}</Text>
+            <Text style={{ opacity: 0.6, color: theme.colors.muted }}>{item.status}</Text>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          <Text style={{ padding: 16 }}>
+          <Text style={{ padding: 16, color: theme.colors.text }}>
             No weeks yet. Create one from Dashboard.
           </Text>
         }
@@ -109,6 +111,7 @@ function WeekDetailScreen({ route }: any) {
   const league = useStore((s) => s.league);
   const makeSchedule = useStore((s) => s.makeSchedule);
   const matches = useStore((s) => s.matches.filter((m) => m.weekId === id));
+  const { theme } = useTheme();
   
   const generateIfEmpty = () => {
     if (matches.length === 0) makeSchedule(id);
@@ -120,7 +123,7 @@ function WeekDetailScreen({ route }: any) {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, padding: 8 }}>
+    <SafeAreaView style={{ flex: 1, padding: 8, backgroundColor: theme.colors.background }}>
       <View
         style={{
           flexDirection: "row",
@@ -129,7 +132,7 @@ function WeekDetailScreen({ route }: any) {
           marginBottom: 8
         }}
       >
-        <Text style={styles.title}>Schedule</Text>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Schedule</Text>
         <Button
           title={matches.length === 0 ? "Generate" : "Regenerate"}
           onPress={generateIfEmpty}
@@ -141,25 +144,48 @@ function WeekDetailScreen({ route }: any) {
 }
 
 function WeeksStack() {
+  const { theme } = useTheme();
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.text,
+        contentStyle: { backgroundColor: theme.colors.background }
+      }}
+    >
       <Stack.Screen name="WeeksList" component={WeeksListScreen} options={{ title: "Weeks" }} />
       <Stack.Screen name="WeekDetail" component={WeekDetailScreen} options={{ title: "Week Detail" }} />
     </Stack.Navigator>
   );
 }
 
+function AppContent() {
+  const { theme } = useTheme();
+
+  return (
+    <NavigationContainer theme={theme.name === 'dark' ? DarkTheme : DefaultTheme}>
+      <Tab.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: theme.colors.surface },
+          headerTintColor: theme.colors.text,
+          tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
+          tabBarActiveTintColor: theme.colors.primary,
+          tabBarInactiveTintColor: theme.colors.muted,
+        }}
+      >
+        <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: true }} />
+        <Tab.Screen name="Calendar" component={CalendarScreen} />
+        <Tab.Screen name="Roster" component={RosterScreen} />
+        <Tab.Screen name="Analytics" component={AnalyticsScreen} />
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
+}
+
 export default function App() {
   return (
     <ThemeProvider>
-      <NavigationContainer>
-        <Tab.Navigator>
-          <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: true }} />
-          <Tab.Screen name="Calendar" component={CalendarScreen} />
-          <Tab.Screen name="Roster" component={RosterScreen} />
-          <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-        </Tab.Navigator>
-      </NavigationContainer>
+      <AppContent />
     </ThemeProvider>
   );
 }
@@ -169,7 +195,6 @@ const styles = StyleSheet.create({
   item: {
     padding: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#ddd"
   },
   itemTitle: { fontWeight: "600", marginBottom: 4 }
 });

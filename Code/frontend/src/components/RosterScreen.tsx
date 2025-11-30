@@ -44,6 +44,7 @@ const formatPhoneNumber = (value: string): string => {
 
 function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPlayerModalProps) {
   const [editedPlayer, setEditedPlayer] = useState<Player | null>(player);
+  const { theme } = useTheme();
 
   React.useEffect(() => {
     setEditedPlayer(player);
@@ -112,21 +113,21 @@ function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPla
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>
+      <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
             {player?.id.startsWith('new-') ? 'Add Player' : 'Edit Player'}
           </Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity 
-              style={styles.headerCancelButton} 
+              style={[styles.headerCancelButton, { backgroundColor: theme.colors.muted }]}
               onPress={onClose}
             >
               <Text style={styles.headerCancelText}>Cancel</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.headerSaveButton} 
+              style={[styles.headerSaveButton, { backgroundColor: theme.colors.primary }]}
               onPress={handleSave}
             >
               <Text style={styles.headerSaveText}>Save Changes</Text>
@@ -136,18 +137,18 @@ function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPla
 
         <ScrollView style={styles.modalContent}>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Name *</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Name *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
               value={editedPlayer.displayName || ''}
               onChangeText={(text) => setEditedPlayer({ ...editedPlayer, displayName: text })}
               placeholder="Enter player name"
-              placeholderTextColor="#999"
+              placeholderTextColor={theme.colors.muted}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Skill Level *</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Skill Level *</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.skillScrollView}>
               <View style={styles.skillPickerContainer}>
                 {SKILL_LEVELS.map((skill) => (
@@ -155,13 +156,15 @@ function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPla
                     key={skill}
                     style={[
                       styles.skillOption,
-                      editedPlayer.skill === skill && styles.skillOptionActive
+                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                      editedPlayer.skill === skill && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                     ]}
                     onPress={() => setEditedPlayer({ ...editedPlayer, skill })}
                   >
                     <Text style={[
                       styles.skillOptionText,
-                      editedPlayer.skill === skill && styles.skillOptionTextActive
+                      { color: theme.colors.text },
+                      editedPlayer.skill === skill && { color: 'white' }
                     ]}>
                       {skill}
                     </Text>
@@ -172,20 +175,22 @@ function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPla
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Handedness</Text>
-            <View style={styles.segmentedControl}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Handedness</Text>
+            <View style={[styles.segmentedControl, { borderColor: theme.colors.border }]}>
               {(['L', 'R', 'A'] as const).map((hand) => (
                 <TouchableOpacity
                   key={hand}
                   style={[
                     styles.segmentButton,
-                    editedPlayer.handed === hand && styles.segmentButtonActive
+                    { backgroundColor: theme.colors.card },
+                    editedPlayer.handed === hand && { backgroundColor: theme.colors.primary }
                   ]}
                   onPress={() => setEditedPlayer({ ...editedPlayer, handed: hand })}
                 >
                   <Text style={[
                     styles.segmentText,
-                    editedPlayer.handed === hand && styles.segmentTextActive
+                    { color: theme.colors.text },
+                    editedPlayer.handed === hand && { color: 'white', fontWeight: '600' }
                   ]}>
                     {hand === 'L' ? 'Left' : hand === 'R' ? 'Right' : 'Ambidextrous'}
                   </Text>
@@ -195,29 +200,29 @@ function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPla
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Phone</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Phone</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
               value={editedPlayer.phone || ''}
               onChangeText={(text) => {
                 const formatted = formatPhoneNumber(text);
                 setEditedPlayer({ ...editedPlayer, phone: formatted });
               }}
               placeholder="(508) 555-1234"
-              placeholderTextColor="#999"
+              placeholderTextColor={theme.colors.muted}
               keyboardType="phone-pad"
               maxLength={14}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Email</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
               value={editedPlayer.email || ''}
               onChangeText={(text) => setEditedPlayer({ ...editedPlayer, email: text })}
               placeholder="player@email.com"
-              placeholderTextColor="#999"
+              placeholderTextColor={theme.colors.muted}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -225,14 +230,14 @@ function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPla
 
           {!player?.id.startsWith('new-') && (player?.createdAt || player?.updatedAt) && (
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Timestamps</Text>
+              <Text style={[styles.label, { color: theme.colors.text }]}>Timestamps</Text>
               {player?.createdAt && (
-                <Text style={styles.timestampText}>
+                <Text style={[styles.timestampText, { color: theme.colors.muted }]}>
                   Created: {new Date(player.createdAt).toLocaleString()}
                 </Text>
               )}
               {player?.updatedAt && (
-                <Text style={styles.timestampText}>
+                <Text style={[styles.timestampText, { color: theme.colors.muted }]}>
                   Updated: {new Date(player.updatedAt).toLocaleString()}
                 </Text>
               )}
@@ -240,7 +245,7 @@ function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPla
           )}
 
           {!player?.id.startsWith('new-') && onDelete && (
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+            <TouchableOpacity style={[styles.deleteButton, { backgroundColor: theme.colors.error }]} onPress={handleDelete}>
               <Text style={styles.deleteButtonText}>Delete Player</Text>
             </TouchableOpacity>
           )}
@@ -251,6 +256,8 @@ function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPla
 }
 
 function PlayerRow({ player, onEdit }: { player: Player; onEdit: (player: Player) => void }) {
+  const { theme } = useTheme();
+
   const getShareLabel = (shareType?: string) => {
     switch (shareType) {
       case 'F': return 'Full';
@@ -280,29 +287,29 @@ function PlayerRow({ player, onEdit }: { player: Player; onEdit: (player: Player
   };
 
   return (
-    <TouchableOpacity style={styles.playerRow} onPress={() => onEdit(player)}>
+    <TouchableOpacity style={[styles.playerRow, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]} onPress={() => onEdit(player)}>
       <View style={styles.playerInfo}>
-        <Text style={styles.playerName}>{player.displayName}</Text>
+        <Text style={[styles.playerName, { color: theme.colors.text }]}>{player.displayName}</Text>
         <View style={styles.playerDetails}>
-          <Text style={styles.playerDetail}>Skill: {player.skill}</Text>
-          <Text style={styles.playerDetail}>
+          <Text style={[styles.playerDetail, { color: theme.colors.muted }]}>Skill: {player.skill}</Text>
+          <Text style={[styles.playerDetail, { color: theme.colors.muted }]}>
             Hand: {player.handed === 'L' ? 'Left' : player.handed === 'R' ? 'Right' : 'Ambidextrous'}
           </Text>
-          <Text style={styles.playerDetail}>
+          <Text style={[styles.playerDetail, { color: theme.colors.muted }]}>
             Share: {getShareLabel(player.shareType)} ({player.sharePercentage || 0}%)
           </Text>
           {player.updatedAt && (
-            <Text style={styles.playerTimestamp}>{formatLastUpdated(player.updatedAt)}</Text>
+            <Text style={[styles.playerTimestamp, { color: theme.colors.muted }]}>{formatLastUpdated(player.updatedAt)}</Text>
           )}
         </View>
         {player.phone && (
-          <Text style={styles.playerContact}>{player.phone}</Text>
+          <Text style={[styles.playerContact, { color: theme.colors.text }]}>{player.phone}</Text>
         )}
         {player.email && (
-          <Text style={styles.playerContact}>{player.email}</Text>
+          <Text style={[styles.playerContact, { color: theme.colors.text }]}>{player.email}</Text>
         )}
       </View>
-      <View style={styles.skillBadge}>
+      <View style={[styles.skillBadge, { backgroundColor: theme.colors.primary }]}>
         <Text style={styles.skillText}>{player.skill}</Text>
       </View>
     </TouchableOpacity>
@@ -572,8 +579,8 @@ export default function RosterScreen() {
       </View>
 
       {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={[styles.errorContainer, { backgroundColor: theme.colors.errorBackground, borderColor: theme.colors.error }]}>
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
         </View>
       )}
 
@@ -639,7 +646,6 @@ export default function RosterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
@@ -647,17 +653,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#212529',
   },
   addButton: {
-    backgroundColor: '#007bff',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -672,7 +674,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   clearAllButton: {
-    backgroundColor: '#dc3545',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -683,7 +684,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   importButton: {
-    backgroundColor: '#6f42c1',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -698,13 +698,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
   },
   statsText: {
     fontSize: 14,
-    color: '#6c757d',
     fontWeight: '500',
   },
   list: {
@@ -714,9 +711,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
   },
   playerInfo: {
     flex: 1,
@@ -724,7 +719,6 @@ const styles = StyleSheet.create({
   playerName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#212529',
     marginBottom: 4,
   },
   playerDetails: {
@@ -733,22 +727,18 @@ const styles = StyleSheet.create({
   },
   playerDetail: {
     fontSize: 14,
-    color: '#6c757d',
     marginRight: 16,
   },
   playerTimestamp: {
     fontSize: 12,
-    color: '#95a5a6',
     fontStyle: 'italic',
     marginTop: 2,
   },
   playerContact: {
     fontSize: 14,
-    color: '#495057',
     marginBottom: 2,
   },
   skillBadge: {
-    backgroundColor: '#007bff',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -764,7 +754,6 @@ const styles = StyleSheet.create({
   // Modal styles
   modalContainer: {
     flex: 1,
-    backgroundColor: 'white',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -773,14 +762,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
   },
   headerCancelButton: {
-    backgroundColor: '#6c757d',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -791,7 +778,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   headerSaveButton: {
-    backgroundColor: '#27ae60',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -811,21 +797,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#212529',
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ced4da',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    backgroundColor: '#ffffff',
   },
   timestampText: {
     fontSize: 14,
-    color: '#6c757d',
     marginBottom: 4,
     fontFamily: 'monospace',
   },
@@ -834,28 +816,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#ced4da',
   },
   segmentButton: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 8,
-    backgroundColor: 'white',
     alignItems: 'center',
-  },
-  segmentButtonActive: {
-    backgroundColor: '#007bff',
   },
   segmentText: {
     fontSize: 14,
-    color: '#495057',
-  },
-  segmentTextActive: {
-    color: 'white',
-    fontWeight: '600',
   },
   deleteButton: {
-    backgroundColor: '#dc3545',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -881,23 +852,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ced4da',
-    backgroundColor: 'white',
     minWidth: 60,
     alignItems: 'center',
   },
-  skillOptionActive: {
-    backgroundColor: '#007bff',
-    borderColor: '#007bff',
-  },
   skillOptionText: {
     fontSize: 16,
-    color: '#495057',
     fontWeight: '500',
-  },
-  skillOptionTextActive: {
-    color: 'white',
-    fontWeight: '600',
   },
   
   // Loading and error styles
@@ -909,12 +869,10 @@ const styles = StyleSheet.create({
   },
   loadingIndicator: {
     fontSize: 14,
-    color: '#6c757d',
     fontStyle: 'italic',
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#6c757d',
     textAlign: 'center',
     fontStyle: 'italic',
     marginTop: 20,
@@ -922,18 +880,15 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#dc3545',
     textAlign: 'center',
     marginBottom: 8,
   },
   errorDetail: {
     fontSize: 14,
-    color: '#6c757d',
     textAlign: 'center',
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#007bff',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -944,13 +899,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   errorContainer: {
-    backgroundColor: '#f8d7da',
     padding: 12,
     marginHorizontal: 16,
     marginVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#f5c6cb',
   },
   loadingContainer: {
     flex: 1,
@@ -960,7 +913,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#6c757d',
   },
   formActions: {
     marginTop: 20,
@@ -970,7 +922,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cancelButton: {
-    backgroundColor: '#6c757d',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
@@ -984,7 +935,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   saveButton: {
-    backgroundColor: '#27ae60',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,

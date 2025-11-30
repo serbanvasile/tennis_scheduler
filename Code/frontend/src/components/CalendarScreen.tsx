@@ -12,6 +12,7 @@ import {
   Platform
 } from 'react-native';
 import { databaseService } from '../database/sqlite-service';
+import { useTheme } from '../ui/theme';
 
 // Event types
 type EventType = 'singles' | 'doubles';
@@ -47,6 +48,7 @@ export default function CalendarScreen({}: CalendarScreenProps) {
   const [addMode, setAddMode] = useState<'single' | 'series' | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TennisEvent | null>(null);
+  const { theme } = useTheme();
 
   // Form state for new events
   const [newEvent, setNewEvent] = useState({
@@ -285,9 +287,9 @@ export default function CalendarScreen({}: CalendarScreenProps) {
   };
 
   const renderEvent = ({ item }: { item: TennisEvent }) => (
-    <TouchableOpacity style={styles.eventCard} onPress={() => handleEditEvent(item)}>
+    <TouchableOpacity style={[styles.eventCard, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadowColor }]} onPress={() => handleEditEvent(item)}>
       <View style={styles.eventHeader}>
-        <Text style={styles.eventTitle}>{item.title}</Text>
+        <Text style={[styles.eventTitle, { color: theme.colors.text }]}>{item.title}</Text>
         {item.isSeriesEvent && (
           <View style={styles.seriesBadge}>
             <Text style={styles.seriesText}>SERIES</Text>
@@ -295,12 +297,12 @@ export default function CalendarScreen({}: CalendarScreenProps) {
         )}
       </View>
       
-      <Text style={styles.eventDateTime}>
+      <Text style={[styles.eventDateTime, { color: theme.colors.primary }]}>
         {formatEventDateTime(item.startDateTime)}
       </Text>
       
       <View style={styles.eventDetails}>
-        <Text style={styles.eventDetail}>
+        <Text style={[styles.eventDetail, { color: theme.colors.muted }]}>
           Courts: {item.courts} | Type: {item.eventType} | System: {item.system}
         </Text>
       </View>
@@ -314,28 +316,28 @@ export default function CalendarScreen({}: CalendarScreenProps) {
   );
 
   const renderAddModeSelection = () => (
-    <View style={styles.modalContent}>
-      <Text style={styles.modalTitle}>Add Tennis Event</Text>
-      <Text style={styles.modalSubtitle}>Choose the type of event to create:</Text>
+    <View style={[styles.modalContent, { backgroundColor: theme.colors.background }]}>
+      <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Add Tennis Event</Text>
+      <Text style={[styles.modalSubtitle, { color: theme.colors.muted }]}>Choose the type of event to create:</Text>
       
       <TouchableOpacity 
-        style={styles.modeButton} 
+        style={[styles.modeButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
         onPress={() => setAddMode('single')}
       >
-        <Text style={styles.modeButtonText}>Single Event</Text>
-        <Text style={styles.modeButtonDesc}>Create one standalone tennis event</Text>
+        <Text style={[styles.modeButtonText, { color: theme.colors.text }]}>Single Event</Text>
+        <Text style={[styles.modeButtonDesc, { color: theme.colors.muted }]}>Create one standalone tennis event</Text>
       </TouchableOpacity>
       
       <TouchableOpacity 
-        style={styles.modeButton} 
+        style={[styles.modeButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
         onPress={() => setAddMode('series')}
       >
-        <Text style={styles.modeButtonText}>Series of Events</Text>
-        <Text style={styles.modeButtonDesc}>Create multiple recurring tennis events</Text>
+        <Text style={[styles.modeButtonText, { color: theme.colors.text }]}>Series of Events</Text>
+        <Text style={[styles.modeButtonDesc, { color: theme.colors.muted }]}>Create multiple recurring tennis events</Text>
       </TouchableOpacity>
       
       <TouchableOpacity 
-        style={styles.cancelButton} 
+        style={[styles.cancelButton, { backgroundColor: theme.colors.muted }]}
         onPress={() => setShowAddModal(false)}
       >
         <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -344,24 +346,24 @@ export default function CalendarScreen({}: CalendarScreenProps) {
   );
 
   const renderEventForm = () => (
-    <ScrollView style={styles.modalContent}>
-      <Text style={styles.modalTitle}>
+    <ScrollView style={[styles.modalContent, { backgroundColor: theme.colors.background }]}>
+      <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
         {addMode === 'single' ? 'Add Single Event' : 'Add Event Series'}
       </Text>
       
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Event Title</Text>
+        <Text style={[styles.label, { color: theme.colors.text }]}>Event Title</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
           value={newEvent.title}
           onChangeText={(text) => setNewEvent({ ...newEvent, title: text })}
           placeholder="Tennis Tournament"
-          placeholderTextColor="#999"
+          placeholderTextColor={theme.colors.muted}
         />
       </View>
 
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Start Date</Text>
+        <Text style={[styles.label, { color: theme.colors.text }]}>Start Date</Text>
         {Platform.OS === 'web' ? (
           <input
             type="date"
@@ -371,8 +373,9 @@ export default function CalendarScreen({}: CalendarScreenProps) {
               padding: 12,
               fontSize: 16,
               borderRadius: 8,
-              border: '1px solid #e9ecef',
-              backgroundColor: '#fff',
+              border: `1px solid ${theme.colors.border}`,
+              backgroundColor: theme.colors.inputBackground,
+              color: theme.colors.text,
               width: '100%',
               boxSizing: 'border-box'
             }}
@@ -380,17 +383,17 @@ export default function CalendarScreen({}: CalendarScreenProps) {
           />
         ) : (
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
             value={newEvent.startDate}
             onChangeText={(text) => setNewEvent({ ...newEvent, startDate: text })}
             placeholder="2024-10-27"
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.colors.muted}
           />
         )}
       </View>
 
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Start Time</Text>
+        <Text style={[styles.label, { color: theme.colors.text }]}>Start Time</Text>
         {Platform.OS === 'web' ? (
           <input
             type="time"
@@ -400,19 +403,20 @@ export default function CalendarScreen({}: CalendarScreenProps) {
               padding: 12,
               fontSize: 16,
               borderRadius: 8,
-              border: '1px solid #e9ecef',
-              backgroundColor: '#fff',
+              border: `1px solid ${theme.colors.border}`,
+              backgroundColor: theme.colors.inputBackground,
+              color: theme.colors.text,
               width: '100%',
               boxSizing: 'border-box'
             }}
           />
         ) : (
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
             value={newEvent.startTime}
             onChangeText={(text) => setNewEvent({ ...newEvent, startTime: text })}
             placeholder="09:00"
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.colors.muted}
           />
         )}
       </View>
@@ -420,7 +424,7 @@ export default function CalendarScreen({}: CalendarScreenProps) {
       {addMode === 'series' && (
         <>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>End Date (for series)</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>End Date (for series)</Text>
             {Platform.OS === 'web' ? (
               <input
                 type="date"
@@ -430,8 +434,9 @@ export default function CalendarScreen({}: CalendarScreenProps) {
                   padding: 12,
                   fontSize: 16,
                   borderRadius: 8,
-                  border: '1px solid #e9ecef',
-                  backgroundColor: '#fff',
+                  border: `1px solid ${theme.colors.border}`,
+                  backgroundColor: theme.colors.inputBackground,
+                  color: theme.colors.text,
                   width: '100%',
                   boxSizing: 'border-box'
                 }}
@@ -439,17 +444,17 @@ export default function CalendarScreen({}: CalendarScreenProps) {
               />
             ) : (
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
                 value={newEvent.endDate}
                 onChangeText={(text) => setNewEvent({ ...newEvent, endDate: text })}
                 placeholder="2024-12-27"
-                placeholderTextColor="#999"
+                placeholderTextColor={theme.colors.muted}
               />
             )}
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>End Time (for series)</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>End Time (for series)</Text>
             {Platform.OS === 'web' ? (
               <input
                 type="time"
@@ -459,44 +464,45 @@ export default function CalendarScreen({}: CalendarScreenProps) {
                   padding: 12,
                   fontSize: 16,
                   borderRadius: 8,
-                  border: '1px solid #e9ecef',
-                  backgroundColor: '#fff',
+                  border: `1px solid ${theme.colors.border}`,
+                  backgroundColor: theme.colors.inputBackground,
+                  color: theme.colors.text,
                   width: '100%',
                   boxSizing: 'border-box'
                 }}
               />
             ) : (
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
                 value={newEvent.endTime}
                 onChangeText={(text) => setNewEvent({ ...newEvent, endTime: text })}
                 placeholder="17:00"
-                placeholderTextColor="#999"
+                placeholderTextColor={theme.colors.muted}
               />
             )}
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Total Matches</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Total Matches</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
               value={newEvent.totalMatches.toString()}
               onChangeText={(text) => setNewEvent({ ...newEvent, totalMatches: parseInt(text) || 1 })}
               placeholder="8"
-              placeholderTextColor="#999"
+              placeholderTextColor={theme.colors.muted}
               keyboardType="numeric"
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Repeat Every</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Repeat Every</Text>
             <View style={styles.repeatRow}>
               <TextInput
-                style={[styles.input, { flex: 1, marginRight: 10 }]}
+                style={[styles.input, { flex: 1, marginRight: 10, color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
                 value={newEvent.repeatInterval.toString()}
                 onChangeText={(text) => setNewEvent({ ...newEvent, repeatInterval: parseInt(text) || 1 })}
                 placeholder="1"
-                placeholderTextColor="#999"
+                placeholderTextColor={theme.colors.muted}
                 keyboardType="numeric"
               />
               <View style={styles.pickerContainer}>
@@ -505,13 +511,15 @@ export default function CalendarScreen({}: CalendarScreenProps) {
                     key={period}
                     style={[
                       styles.periodButton,
-                      newEvent.repeatPeriod === period && styles.periodButtonActive
+                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                      newEvent.repeatPeriod === period && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                     ]}
                     onPress={() => setNewEvent({ ...newEvent, repeatPeriod: period })}
                   >
                     <Text style={[
                       styles.periodButtonText,
-                      newEvent.repeatPeriod === period && styles.periodButtonTextActive
+                      { color: theme.colors.text },
+                      newEvent.repeatPeriod === period && { color: 'white' }
                     ]}>
                       {period}
                     </Text>
@@ -524,32 +532,34 @@ export default function CalendarScreen({}: CalendarScreenProps) {
       )}
 
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Number of Courts</Text>
+        <Text style={[styles.label, { color: theme.colors.text }]}>Number of Courts</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
           value={newEvent.courts.toString()}
           onChangeText={(text) => setNewEvent({ ...newEvent, courts: parseInt(text) || 1 })}
           placeholder="4"
-          placeholderTextColor="#999"
+          placeholderTextColor={theme.colors.muted}
           keyboardType="numeric"
         />
       </View>
 
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Event Type</Text>
+        <Text style={[styles.label, { color: theme.colors.text }]}>Event Type</Text>
         <View style={styles.pickerContainer}>
           {(['singles', 'doubles'] as EventType[]).map((type) => (
             <TouchableOpacity
               key={type}
               style={[
                 styles.typeButton,
-                newEvent.eventType === type && styles.typeButtonActive
+                { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                newEvent.eventType === type && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
               ]}
               onPress={() => setNewEvent({ ...newEvent, eventType: type })}
             >
               <Text style={[
                 styles.typeButtonText,
-                newEvent.eventType === type && styles.typeButtonTextActive
+                { color: theme.colors.text },
+                newEvent.eventType === type && { color: 'white' }
               ]}>
                 {type}
               </Text>
@@ -559,20 +569,22 @@ export default function CalendarScreen({}: CalendarScreenProps) {
       </View>
 
       <View style={styles.formGroup}>
-        <Text style={styles.label}>System</Text>
+        <Text style={[styles.label, { color: theme.colors.text }]}>System</Text>
         <View style={styles.pickerContainer}>
           {(['round-robin', 'playoff', 'swiss', 'elimination'] as EventSystem[]).map((system) => (
             <TouchableOpacity
               key={system}
               style={[
                 styles.systemButton,
-                newEvent.system === system && styles.systemButtonActive
+                { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                newEvent.system === system && { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }
               ]}
               onPress={() => setNewEvent({ ...newEvent, system: system })}
             >
               <Text style={[
                 styles.systemButtonText,
-                newEvent.system === system && styles.systemButtonTextActive
+                { color: theme.colors.text },
+                newEvent.system === system && { color: 'white' }
               ]}>
                 {system}
               </Text>
@@ -584,7 +596,7 @@ export default function CalendarScreen({}: CalendarScreenProps) {
       <View style={styles.formActions}>
         <View style={styles.editModalButtons}>
           <TouchableOpacity 
-            style={styles.cancelButton} 
+            style={[styles.cancelButton, { backgroundColor: theme.colors.muted }]}
             onPress={() => {
               resetForm();
               setAddMode(null);
@@ -595,7 +607,7 @@ export default function CalendarScreen({}: CalendarScreenProps) {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.createButton} 
+            style={[styles.createButton, { backgroundColor: theme.colors.primary }]}
             onPress={handleCreateEvent}
           >
             <Text style={styles.createButtonText}>
@@ -611,12 +623,12 @@ export default function CalendarScreen({}: CalendarScreenProps) {
     if (!editingEvent) return null;
     
     return (
-      <ScrollView style={styles.modalContent}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Edit Event</Text>
+      <ScrollView style={[styles.modalContent, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Edit Event</Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity 
-              style={styles.headerCancelButton} 
+              style={[styles.headerCancelButton, { backgroundColor: theme.colors.muted }]}
               onPress={() => {
                 setEditingEvent(null);
                 setShowEditModal(false);
@@ -626,7 +638,7 @@ export default function CalendarScreen({}: CalendarScreenProps) {
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.headerSaveButton} 
+              style={[styles.headerSaveButton, { backgroundColor: theme.colors.primary }]}
               onPress={handleSaveEvent}
             >
               <Text style={styles.headerSaveText}>Save Changes</Text>
@@ -635,18 +647,18 @@ export default function CalendarScreen({}: CalendarScreenProps) {
         </View>
         
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Event Title</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Event Title</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
             value={editingEvent.title}
             onChangeText={(text) => setEditingEvent({ ...editingEvent, title: text })}
             placeholder="Tennis Tournament"
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.colors.muted}
           />
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Start Date</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Start Date</Text>
           {Platform.OS === 'web' ? (
             <input
               type="date"
@@ -664,28 +676,29 @@ export default function CalendarScreen({}: CalendarScreenProps) {
                 padding: 12,
                 fontSize: 16,
                 borderRadius: 8,
-                border: '1px solid #e9ecef',
-                backgroundColor: '#fff',
+                border: `1px solid ${theme.colors.border}`,
+                backgroundColor: theme.colors.inputBackground,
+                color: theme.colors.text,
                 width: '100%',
                 boxSizing: 'border-box'
               }}
             />
           ) : (
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
               value={editingEvent.startDateTime ? editingEvent.startDateTime.split('T')[0] : ''}
               onChangeText={(text) => {
                 const time = editingEvent.startDateTime ? editingEvent.startDateTime.split('T')[1] : '09:00:00.000Z';
                 setEditingEvent({ ...editingEvent, startDateTime: `${text}T${time}` });
               }}
               placeholder="2024-10-27"
-              placeholderTextColor="#999"
+              placeholderTextColor={theme.colors.muted}
             />
           )}
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Start Time</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Start Time</Text>
           {Platform.OS === 'web' ? (
             <input
               type="time"
@@ -701,15 +714,16 @@ export default function CalendarScreen({}: CalendarScreenProps) {
                 padding: 12,
                 fontSize: 16,
                 borderRadius: 8,
-                border: '1px solid #e9ecef',
-                backgroundColor: '#fff',
+                border: `1px solid ${theme.colors.border}`,
+                backgroundColor: theme.colors.inputBackground,
+                color: theme.colors.text,
                 width: '100%',
                 boxSizing: 'border-box'
               }}
             />
           ) : (
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
               value={editingEvent.startDateTime ? editingEvent.startDateTime.split('T')[1].slice(0, 5) : ''}
               onChangeText={(text) => {
                 const date = editingEvent.startDateTime ? editingEvent.startDateTime.split('T')[0] : new Date().toISOString().split('T')[0];
@@ -721,9 +735,9 @@ export default function CalendarScreen({}: CalendarScreenProps) {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Number of Courts</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Number of Courts</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
             value={editingEvent.courts?.toString() || '1'}
             onChangeText={(text) => setEditingEvent({ ...editingEvent, courts: parseInt(text) || 1 })}
             placeholder="4"
@@ -732,20 +746,22 @@ export default function CalendarScreen({}: CalendarScreenProps) {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Event Type</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Event Type</Text>
           <View style={styles.pickerContainer}>
             {(['singles', 'doubles'] as EventType[]).map((type) => (
               <TouchableOpacity
                 key={type}
                 style={[
                   styles.typeButton,
-                  editingEvent.eventType === type && styles.typeButtonActive
+                  { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                  editingEvent.eventType === type && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                 ]}
                 onPress={() => setEditingEvent({ ...editingEvent, eventType: type })}
               >
                 <Text style={[
                   styles.typeButtonText,
-                  editingEvent.eventType === type && styles.typeButtonTextActive
+                  { color: theme.colors.text },
+                  editingEvent.eventType === type && { color: 'white' }
                 ]}>
                   {type}
                 </Text>
@@ -755,20 +771,22 @@ export default function CalendarScreen({}: CalendarScreenProps) {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>System</Text>
+          <Text style={[styles.label, { color: theme.colors.text }]}>System</Text>
           <View style={styles.pickerContainer}>
             {(['adhoc', 'round-robin', 'playoff', 'swiss', 'elimination'] as EventSystem[]).map((system) => (
               <TouchableOpacity
                 key={system}
                 style={[
                   styles.systemButton,
-                  editingEvent.system === system && styles.systemButtonActive
+                  { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                  editingEvent.system === system && { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }
                 ]}
                 onPress={() => setEditingEvent({ ...editingEvent, system: system })}
               >
                 <Text style={[
                   styles.systemButtonText,
-                  editingEvent.system === system && styles.systemButtonTextActive
+                  { color: theme.colors.text },
+                  editingEvent.system === system && { color: 'white' }
                 ]}>
                   {system}
                 </Text>
@@ -778,7 +796,7 @@ export default function CalendarScreen({}: CalendarScreenProps) {
         </View>
 
         <TouchableOpacity 
-          style={styles.deleteButton} 
+          style={[styles.deleteButton, { backgroundColor: theme.colors.error }]}
           onPress={handleDeleteEvent}
         >
           <Text style={styles.deleteButtonText}>Delete Event</Text>
@@ -851,23 +869,23 @@ export default function CalendarScreen({}: CalendarScreenProps) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.loadingText}>Loading events...</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Text style={[styles.loadingText, { color: theme.colors.muted }]}>Loading events...</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Calendar</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Calendar</Text>
         <View style={styles.headerButtons}>
           {events.length > 0 && (
-            <TouchableOpacity style={styles.clearButton} onPress={handleClearAllEvents}>
+            <TouchableOpacity style={[styles.clearButton, { backgroundColor: theme.colors.error }]} onPress={handleClearAllEvents}>
               <Text style={styles.clearButtonText}>Clear All</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.addButton} onPress={handleAddEvent}>
+          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={handleAddEvent}>
             <Text style={styles.addButtonText}>
               {events.length === 0 ? 'Add First Event' : '+ Add Event'}
             </Text>
@@ -876,16 +894,16 @@ export default function CalendarScreen({}: CalendarScreenProps) {
       </View>
 
       {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={[styles.errorContainer, { backgroundColor: theme.colors.errorBackground, borderColor: theme.colors.error }]}>
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
         </View>
       )}
 
       {events.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>No Events Scheduled</Text>
-          <Text style={styles.emptyText}>Get started by creating your first tennis event</Text>
-          <TouchableOpacity style={styles.emptyButton} onPress={handleAddEvent}>
+          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No Events Scheduled</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.muted }]}>Get started by creating your first tennis event</Text>
+          <TouchableOpacity style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]} onPress={handleAddEvent}>
             <Text style={styles.emptyButtonText}>Add New Event</Text>
           </TouchableOpacity>
         </View>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useStore } from '../store';
+import { useTheme } from '../ui/theme';
 
 export default function AnalyticsScreen() {
   const { 
@@ -10,6 +11,7 @@ export default function AnalyticsScreen() {
     calculatePlayerStats, 
     playerStats 
   } = useStore();
+  const { theme } = useTheme();
 
   // Calculate overall fairness metrics
   const overallMetrics = calculateFairnessMetrics();
@@ -19,28 +21,28 @@ export default function AnalyticsScreen() {
   const weeklyMetrics = currentWeekId ? calculateFairnessMetrics(currentWeekId) : null;
 
   const renderFairnessCard = (title: string, metrics: any) => (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>{title}</Text>
+    <View style={[styles.card, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadowColor }]}>
+      <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>{title}</Text>
       <View style={styles.metricsGrid}>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Partner Diversity</Text>
-          <Text style={styles.metricValue}>{metrics.partnerDiversity.toFixed(1)}</Text>
+        <View style={[styles.metric, { backgroundColor: theme.colors.background }]}>
+          <Text style={[styles.metricLabel, { color: theme.colors.muted }]}>Partner Diversity</Text>
+          <Text style={[styles.metricValue, { color: theme.colors.primary }]}>{metrics.partnerDiversity.toFixed(1)}</Text>
         </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Opponent Diversity</Text>
-          <Text style={styles.metricValue}>{metrics.opponentDiversity.toFixed(1)}</Text>
+        <View style={[styles.metric, { backgroundColor: theme.colors.background }]}>
+          <Text style={[styles.metricLabel, { color: theme.colors.muted }]}>Opponent Diversity</Text>
+          <Text style={[styles.metricValue, { color: theme.colors.primary }]}>{metrics.opponentDiversity.toFixed(1)}</Text>
         </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Skill Balance</Text>
-          <Text style={styles.metricValue}>{metrics.skillBalance.toFixed(1)}</Text>
+        <View style={[styles.metric, { backgroundColor: theme.colors.background }]}>
+          <Text style={[styles.metricLabel, { color: theme.colors.muted }]}>Skill Balance</Text>
+          <Text style={[styles.metricValue, { color: theme.colors.primary }]}>{metrics.skillBalance.toFixed(1)}</Text>
         </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Court Balance</Text>
-          <Text style={styles.metricValue}>{metrics.courtBalance.toFixed(1)}</Text>
+        <View style={[styles.metric, { backgroundColor: theme.colors.background }]}>
+          <Text style={[styles.metricLabel, { color: theme.colors.muted }]}>Court Balance</Text>
+          <Text style={[styles.metricValue, { color: theme.colors.primary }]}>{metrics.courtBalance.toFixed(1)}</Text>
         </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Overall Fairness</Text>
-          <Text style={[styles.metricValue, styles.overallScore]}>
+        <View style={[styles.metric, { backgroundColor: theme.colors.background }]}>
+          <Text style={[styles.metricLabel, { color: theme.colors.muted }]}>Overall Fairness</Text>
+          <Text style={[styles.metricValue, styles.overallScore, { color: theme.colors.accent }]}>
             {metrics.overallFairness.toFixed(1)}
           </Text>
         </View>
@@ -49,23 +51,23 @@ export default function AnalyticsScreen() {
   );
 
   const renderPlayerStats = () => (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Player Statistics</Text>
+    <View style={[styles.card, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadowColor }]}>
+      <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>Player Statistics</Text>
       <ScrollView style={styles.playersList}>
         {roster.map(player => {
           const stats = calculatePlayerStats(player.id);
           return (
-            <View key={player.id} style={styles.playerRow}>
-              <Text style={styles.playerName}>{player.displayName}</Text>
+            <View key={player.id} style={[styles.playerRow, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.playerName, { color: theme.colors.text }]}>{player.displayName}</Text>
               <View style={styles.playerStatsRow}>
-                <Text style={styles.statText}>Matches: {stats.totalMatches}</Text>
-                <Text style={styles.statText}>
+                <Text style={[styles.statText, { color: theme.colors.muted }]}>Matches: {stats.totalMatches}</Text>
+                <Text style={[styles.statText, { color: theme.colors.muted }]}>
                   Partners: {Object.keys(stats.partners).length}
                 </Text>
-                <Text style={styles.statText}>
+                <Text style={[styles.statText, { color: theme.colors.muted }]}>
                   Opponents: {Object.keys(stats.opponents).length}
                 </Text>
-                <Text style={styles.statText}>Skill: {player.skill}</Text>
+                <Text style={[styles.statText, { color: theme.colors.muted }]}>Skill: {player.skill}</Text>
               </View>
             </View>
           );
@@ -84,19 +86,19 @@ export default function AnalyticsScreen() {
     });
 
     return (
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Partner Distribution Matrix</Text>
-        <Text style={styles.subtitle}>Shows how many times each player has partnered with others</Text>
+      <View style={[styles.card, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadowColor }]}>
+        <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>Partner Distribution Matrix</Text>
+        <Text style={[styles.subtitle, { color: theme.colors.muted }]}>Shows how many times each player has partnered with others</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View>
             {/* Header row */}
             <View style={styles.matrixRow}>
-              <View style={styles.matrixCell}>
-                <Text style={styles.matrixHeaderText}>Player</Text>
+              <View style={[styles.matrixCell, { borderColor: theme.colors.border }]}>
+                <Text style={[styles.matrixHeaderText, { color: theme.colors.primary }]}>Player</Text>
               </View>
               {roster.slice(0, 8).map(player => (
-                <View key={player.id} style={styles.matrixCell}>
-                  <Text style={styles.matrixHeaderText} numberOfLines={1}>
+                <View key={player.id} style={[styles.matrixCell, { borderColor: theme.colors.border }]}>
+                  <Text style={[styles.matrixHeaderText, { color: theme.colors.primary }]} numberOfLines={1}>
                     {player.displayName.split(' ')[0]}
                   </Text>
                 </View>
@@ -106,14 +108,14 @@ export default function AnalyticsScreen() {
             {/* Data rows */}
             {roster.slice(0, 8).map(player => (
               <View key={player.id} style={styles.matrixRow}>
-                <View style={styles.matrixCell}>
-                  <Text style={styles.matrixPlayerText} numberOfLines={1}>
+                <View style={[styles.matrixCell, { borderColor: theme.colors.border }]}>
+                  <Text style={[styles.matrixPlayerText, { color: theme.colors.text }]} numberOfLines={1}>
                     {player.displayName.split(' ')[0]}
                   </Text>
                 </View>
                 {roster.slice(0, 8).map(partner => (
-                  <View key={partner.id} style={styles.matrixCell}>
-                    <Text style={styles.matrixValueText}>
+                  <View key={partner.id} style={[styles.matrixCell, { borderColor: theme.colors.border }]}>
+                    <Text style={[styles.matrixValueText, { color: theme.colors.accent }]}>
                       {player.id === partner.id ? '-' : 
                        (partnerMatrix[player.id]?.[partner.id] || 0)}
                     </Text>
@@ -128,8 +130,8 @@ export default function AnalyticsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Tennis League Analytics</Text>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Text style={[styles.title, { color: theme.colors.primary }]}>Tennis League Analytics</Text>
       
       {renderFairnessCard('Overall Season Metrics', overallMetrics)}
       
@@ -139,18 +141,18 @@ export default function AnalyticsScreen() {
       
       {renderPartnerMatrix()}
       
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Algorithm Insights</Text>
-        <Text style={styles.infoText}>
+      <View style={[styles.card, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadowColor }]}>
+        <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>Algorithm Insights</Text>
+        <Text style={[styles.infoText, { color: theme.colors.text }]}>
           • Partner Diversity: Measures how evenly players are distributed as partners
         </Text>
-        <Text style={styles.infoText}>
+        <Text style={[styles.infoText, { color: theme.colors.text }]}>
           • Skill Balance: How well-matched teams are in terms of combined skill levels
         </Text>
-        <Text style={styles.infoText}>
+        <Text style={[styles.infoText, { color: theme.colors.text }]}>
           • Court Balance: How evenly players are distributed across different courts
         </Text>
-        <Text style={styles.infoText}>
+        <Text style={[styles.infoText, { color: theme.colors.text }]}>
           • Overall Fairness: Combined score weighing all fairness factors
         </Text>
       </View>
@@ -161,7 +163,6 @@ export default function AnalyticsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
     padding: 16,
   },
   title: {
@@ -169,14 +170,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
-    color: '#2e7d32',
   },
   card: {
-    backgroundColor: 'white',
     borderRadius: 8,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -186,11 +184,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 12,
-    color: '#1976d2',
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 12,
     fontStyle: 'italic',
   },
@@ -203,21 +199,17 @@ const styles = StyleSheet.create({
     width: '48%',
     marginBottom: 12,
     padding: 8,
-    backgroundColor: '#f8f9fa',
     borderRadius: 6,
   },
   metricLabel: {
     fontSize: 12,
-    color: '#666',
     marginBottom: 4,
   },
   metricValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#2e7d32',
   },
   overallScore: {
-    color: '#1976d2',
     fontSize: 20,
   },
   playersList: {
@@ -226,13 +218,11 @@ const styles = StyleSheet.create({
   playerRow: {
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   playerName: {
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
-    color: '#333',
   },
   playerStatsRow: {
     flexDirection: 'row',
@@ -240,7 +230,6 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontSize: 12,
-    color: '#666',
   },
   matrixRow: {
     flexDirection: 'row',
@@ -251,29 +240,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
   },
   matrixHeaderText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#1976d2',
     textAlign: 'center',
   },
   matrixPlayerText: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#333',
     textAlign: 'center',
   },
   matrixValueText: {
     fontSize: 12,
-    color: '#2e7d32',
     textAlign: 'center',
     fontWeight: '600',
   },
   infoText: {
     fontSize: 14,
-    color: '#555',
     marginBottom: 6,
     lineHeight: 20,
   },

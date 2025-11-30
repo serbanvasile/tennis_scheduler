@@ -29,11 +29,9 @@ export const MatchCard: React.FC<{ match: Match }> = ({ match }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 12,
     marginVertical: 8,
-    shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2
