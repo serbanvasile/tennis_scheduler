@@ -12,13 +12,14 @@ import {
   SafeAreaView
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { ThemeProvider, useTheme } from "./src/ui/theme";
+import { ThemeProvider, useTheme, MAX_CONTENT_WIDTH } from "./src/ui/theme";
 import { useStore } from "./src/store";
 import type { Week } from "./src/types";
 import { CourtColumn } from "./src/components/CourtColumn";
 import AnalyticsScreen from "./src/components/AnalyticsScreen";
 import RosterScreen from "./src/components/RosterScreen";
 import CalendarScreen from "./src/components/CalendarScreen";
+import TeamsScreen from "./src/components/TeamsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -52,14 +53,14 @@ function DashboardScreen({ navigation }: any) {
   const league = useStore((s) => s.league);
   const generateWeek = useStore((s) => s.generateWeek);
   const latest = weeks[weeks.length - 1];
-  
+
   return (
     <SafeAreaView style={{ flex: 1, padding: 16, backgroundColor: theme.colors.background }}>
       <Text style={[styles.title, { color: theme.colors.text }]}>{league.name}</Text>
       <Text style={{ marginBottom: 12, color: theme.colors.text }}>Weeks created: {weeks.length}</Text>
-      <Button 
-        title="Create Next Week" 
-        onPress={() => generateWeek(weeks.length)} 
+      <Button
+        title="Create Next Week"
+        onPress={() => generateWeek(weeks.length)}
       />
       <View style={{ height: 12 }} />
       <Button
@@ -112,7 +113,7 @@ function WeekDetailScreen({ route }: any) {
   const makeSchedule = useStore((s) => s.makeSchedule);
   const matches = useStore((s) => s.matches.filter((m) => m.weekId === id));
   const { theme } = useTheme();
-  
+
   const generateIfEmpty = () => {
     if (matches.length === 0) makeSchedule(id);
   };
@@ -159,26 +160,65 @@ function WeeksStack() {
   );
 }
 
+function ThemeToggle() {
+  const { theme, setThemeName } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={() => setThemeName(theme.name === 'light' ? 'dark' : 'light')}
+      style={{ padding: 6, marginRight: 16 }}
+      accessibilityLabel="Toggle theme"
+    >
+      <Text style={{ fontSize: 18, color: theme.colors.text }}>{theme.name === 'light' ? '🌙' : '☀️'}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function DateTimeHeader() {
+  const { theme } = useTheme();
+  const [now, setNow] = React.useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  return (
+    <Text style={{ color: theme.colors.muted, fontSize: 13, marginLeft: 16 }}>
+      {dateStr} • {timeStr}
+    </Text>
+  );
+}
+
 function AppContent() {
   const { theme } = useTheme();
 
   return (
-    <NavigationContainer theme={theme.name === 'dark' ? DarkTheme : DefaultTheme}>
-      <Tab.Navigator
-        screenOptions={{
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTintColor: theme.colors.text,
-          tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
-          tabBarActiveTintColor: theme.colors.primary,
-          tabBarInactiveTintColor: theme.colors.muted,
-        }}
-      >
-        <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: true }} />
-        <Tab.Screen name="Calendar" component={CalendarScreen} />
-        <Tab.Screen name="Roster" component={RosterScreen} />
-        <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-      </Tab.Navigator>
-    </NavigationContainer>
+    <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: MAX_CONTENT_WIDTH, overflow: 'hidden' }}>
+        <NavigationContainer theme={theme.name === 'dark' ? DarkTheme : DefaultTheme}>
+          <Tab.Navigator
+            screenOptions={{
+              headerStyle: { backgroundColor: theme.colors.surface, height: 50 },
+              headerTintColor: theme.colors.text,
+              headerTitle: () => null,
+              headerLeft: () => <DateTimeHeader />,
+              headerRight: () => <ThemeToggle />,
+              tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
+              tabBarActiveTintColor: theme.colors.primary,
+              tabBarInactiveTintColor: theme.colors.muted,
+            }}
+          >
+            <Tab.Screen name="Teams" component={TeamsScreen} />
+            <Tab.Screen name="Calendar" component={CalendarScreen} />
+            <Tab.Screen name="Roster" component={RosterScreen} />
+            <Tab.Screen name="Analytics" component={AnalyticsScreen} />
+          </Tab.Navigator>
+        </NavigationContainer>
+      </View>
+    </View>
   );
 }
 

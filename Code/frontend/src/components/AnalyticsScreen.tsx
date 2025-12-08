@@ -1,21 +1,22 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useStore } from '../store';
 import { useTheme } from '../ui/theme';
+import { ScreenHeader } from './ScreenHeader';
 
 export default function AnalyticsScreen() {
-  const { 
-    roster, 
-    matches, 
-    calculateFairnessMetrics, 
-    calculatePlayerStats, 
-    playerStats 
+  const {
+    roster,
+    matches,
+    calculateFairnessMetrics,
+    calculatePlayerStats,
+    playerStats
   } = useStore();
   const { theme } = useTheme();
 
   // Calculate overall fairness metrics
   const overallMetrics = calculateFairnessMetrics();
-  
+
   // Calculate current week fairness if there are matches
   const currentWeekId = matches.length > 0 ? matches[matches.length - 1].weekId : undefined;
   const weeklyMetrics = currentWeekId ? calculateFairnessMetrics(currentWeekId) : null;
@@ -78,7 +79,7 @@ export default function AnalyticsScreen() {
 
   const renderPartnerMatrix = () => {
     const partnerMatrix: Record<string, Record<string, number>> = {};
-    
+
     // Build partner matrix
     roster.forEach(player => {
       const stats = calculatePlayerStats(player.id);
@@ -104,7 +105,7 @@ export default function AnalyticsScreen() {
                 </View>
               ))}
             </View>
-            
+
             {/* Data rows */}
             {roster.slice(0, 8).map(player => (
               <View key={player.id} style={styles.matrixRow}>
@@ -116,8 +117,8 @@ export default function AnalyticsScreen() {
                 {roster.slice(0, 8).map(partner => (
                   <View key={partner.id} style={[styles.matrixCell, { borderColor: theme.colors.border }]}>
                     <Text style={[styles.matrixValueText, { color: theme.colors.accent }]}>
-                      {player.id === partner.id ? '-' : 
-                       (partnerMatrix[player.id]?.[partner.id] || 0)}
+                      {player.id === partner.id ? '-' :
+                        (partnerMatrix[player.id]?.[partner.id] || 0)}
                     </Text>
                   </View>
                 ))}
@@ -130,39 +131,43 @@ export default function AnalyticsScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Text style={[styles.title, { color: theme.colors.primary }]}>Tennis League Analytics</Text>
-      
-      {renderFairnessCard('Overall Season Metrics', overallMetrics)}
-      
-      {weeklyMetrics && renderFairnessCard('Current Week Metrics', weeklyMetrics)}
-      
-      {renderPlayerStats()}
-      
-      {renderPartnerMatrix()}
-      
-      <View style={[styles.card, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadowColor }]}>
-        <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>Algorithm Insights</Text>
-        <Text style={[styles.infoText, { color: theme.colors.text }]}>
-          • Partner Diversity: Measures how evenly players are distributed as partners
-        </Text>
-        <Text style={[styles.infoText, { color: theme.colors.text }]}>
-          • Skill Balance: How well-matched teams are in terms of combined skill levels
-        </Text>
-        <Text style={[styles.infoText, { color: theme.colors.text }]}>
-          • Court Balance: How evenly players are distributed across different courts
-        </Text>
-        <Text style={[styles.infoText, { color: theme.colors.text }]}>
-          • Overall Fairness: Combined score weighing all fairness factors
-        </Text>
-      </View>
-    </ScrollView>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ScreenHeader title="Analytics" />
+      <ScrollView style={styles.scrollContent}>
+
+        {renderFairnessCard('Overall Season Metrics', overallMetrics)}
+
+        {weeklyMetrics && renderFairnessCard('Current Week Metrics', weeklyMetrics)}
+
+        {renderPlayerStats()}
+
+        {renderPartnerMatrix()}
+
+        <View style={[styles.card, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadowColor }]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>Algorithm Insights</Text>
+          <Text style={[styles.infoText, { color: theme.colors.text }]}>
+            • Partner Diversity: Measures how evenly players are distributed as partners
+          </Text>
+          <Text style={[styles.infoText, { color: theme.colors.text }]}>
+            • Skill Balance: How well-matched teams are in terms of combined skill levels
+          </Text>
+          <Text style={[styles.infoText, { color: theme.colors.text }]}>
+            • Court Balance: How evenly players are distributed across different courts
+          </Text>
+          <Text style={[styles.infoText, { color: theme.colors.text }]}>
+            • Overall Fairness: Combined score weighing all fairness factors
+          </Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 16,
   },
   title: {

@@ -1,73 +1,80 @@
 export type DID = string; // did:key / did:pkh
 
-export type Court = { 
-  id: string; 
-  label: string; 
-  location?: string; 
-  timeSlots: string[]; // e.g., ['18:00','19:15']
-};
+// --- NEW SCHEMA TYPES (Greenfield) ---
 
-export type Rules = {
-  targetPairsPerSeason: number;
-  balanceWeights: {
-    partners: number;
-    opponents: number;
-    courts: number;
-    sitouts: number;
-    skillParity: number;
-  };
-  maxCourtsPerWeek?: number;
-  allowSubs: boolean;
-  ratingSystem: 'none' | 'elo';
-};
-
-export type League = {
-  id: string; // CID/streamID
+export interface Sport {
+  sport_id: number;
+  guid: string;
   name: string;
-  season: { 
-    startISO: string; 
-    endISO: string; 
-    weekDays: number[]; // e.g., [4] for Thu
-  };
-  courts: Court[];
-  rules: Rules;
-  visibility: 'public' | 'private';
-  adminDIDs: DID[];
-  createdBy: DID;
-  createdAt: string; // ISO
-  policyHash?: string; // snapshot of on-chain policy
-};
+}
 
-export type Player = {
-  id: DID;
-  displayName: string;
-  phone?: string; // stored encrypted
-  email?: string;
-  skill: number; // 1..10 (USTA levels)
-  handed: 'L' | 'R' | 'A'; // Left, Right, Ambidextrous
-  tags?: string[];
-  share?: number; // percentage of 100 for contract tennis
-  shareType?: 'TQ' | 'F' | 'H' | 'OT' | 'TT' | 'R' | 'C'; // Three Quarters, Full, Half, One Third, Two Thirds, Reserve, Custom
-  sharePercentage?: number; // auto-filled based on shareType or custom for 'C'
-  createdAt?: string; // ISO timestamp
-  updatedAt?: string; // ISO timestamp
-};
+export interface Color {
+  color_id: number;
+  guid: string;
+  name: string;
+  hex_code: string;
+}
 
-export type Week = {
+export interface Team {
+  team_id: number;
+  guid: string;
+  name: string;
+  sport_id?: number;
+  sport_name?: string; // Joined field
+  team_colors?: string; // Legacy/Display
+  logo_url?: string;
+  colors?: Color[]; // New linked colors
+}
+
+export interface Role {
+  role_id: number;
+  guid: string;
+  name: string;
+}
+
+export interface Member {
+  member_id: number;
+  guid: string;
+  first_name: string;
+  last_name: string;
+  display_name: string;
+  gender?: string;
+  role_name?: string; // from relationship
+  membership_id?: number; // ref key
+  joined_date?: number;
+}
+
+export interface Venue {
+  venue_id: number;
+  guid: string;
+  name: string;
+  address?: string;
+  details?: any;
+}
+
+export interface TennisEvent {
+  event_id: number;
+  guid: string;
+  name: string;
+  start_date: number;
+  end_date?: number;
+  description?: string;
+  status?: string;
+  courts?: number;
+  event_type?: string;
+  venue_ids?: number[]; // IDs for fetching
+  venue_names?: string[]; // Display helper
+}
+
+// --- LEGACY / SHARED TYPES (Keep for compat or reuse) ---
+
+export type Player = Member; // Alias for backward compat in components
+
+export type Court = {
   id: string;
-  leagueId: string;
-  index: number;
-  dateISO: string;
-  status: 'draft' | 'published' | 'completed' | 'cancelled';
-  notes?: string;
-};
-
-export type Availability = {
-  weekId: string;
-  playerId: DID;
-  state: 'yes' | 'no' | 'maybe';
-  updatedAt: string;
-  signature?: string; // signed by player
+  label: string;
+  location?: string;
+  timeSlots: string[];
 };
 
 export type Match = {
@@ -75,56 +82,10 @@ export type Match = {
   weekId: string;
   courtId: string;
   timeSlot: string;
-  teamA: DID[]; // 2 players
-  teamB: DID[]; // 2 players
-  generatedBy: DID;
+  teamA: string[];
+  teamB: string[];
+  generatedBy: string;
   lock?: boolean;
-  skillLevel?: number; // average skill level
 };
 
-export type Score = {
-  matchId: string;
-  setScores: [number, number][];
-  winner: 'A' | 'B' | 'split' | 'NA';
-  submittedBy: DID;
-  updatedAt: string;
-  signature?: string;
-};
-
-export type StatsSnapshot = {
-  weekId: string;
-  metrics: Record<string, number | string>;
-};
-
-export type AuditEvent = {
-  id: string;
-  type: string;
-  actor: DID;
-  at: string;
-  payloadCID: string;
-  sig: string;
-};
-
-// Player Statistics Types
-export type PlayerStats = {
-  playerId: DID;
-  seasonId: string;
-  totalMatches: number;
-  wins: number;
-  losses: number;
-  partners: Record<DID, number>; // partner -> count
-  opponents: Record<DID, number>; // opponent -> count
-  courtExposure: Record<string, number>; // court -> count
-  sitouts: number;
-  averageSkillDiff: number;
-};
-
-// Fairness Metrics
-export type FairnessMetrics = {
-  partnerDiversity: number; // 0-1 score
-  opponentDiversity: number;
-  courtBalance: number;
-  sitoutBalance: number;
-  skillBalance: number;
-  overallFairness: number;
-};
+// ... (Other legacy rules/stats types omitted for brevity unless needed)

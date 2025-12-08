@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { databaseService } from '../database/sqlite-service';
-import { useTheme } from '../ui/theme';
+import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
 
 interface ParsedPlayer {
   displayName: string;
@@ -69,7 +69,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({ onBack, onImportComp
     try {
       const results = await databaseService.importPlayers(parsedPlayers, importMode, true);
       setImportResults(results);
-      
+
       if (results.errors && results.errors.length > 0) {
         Alert.alert(
           'Import Completed with Warnings',
@@ -112,132 +112,136 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({ onBack, onImportComp
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={[styles.backButtonText, { color: theme.colors.primary }]}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Import Players</Text>
-      </View>
-
-      <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>1. Paste Clipboard Data</Text>
-        <Text style={[styles.helpText, { color: theme.colors.muted }]}>
-          Copy data from Excel with columns: #, NAME, Share, Cell, Level
-        </Text>
-        <Text style={[styles.sampleLabel, { color: theme.colors.text }]}>Sample format:</Text>
-        <Text style={[styles.sampleData, { backgroundColor: theme.colors.card, color: theme.colors.text }]}>{sampleData}</Text>
-        
-        <TextInput
-          style={[styles.textArea, { borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, color: theme.colors.text }]}
-          multiline
-          placeholder="Paste your clipboard data here..."
-          placeholderTextColor={theme.colors.muted}
-          value={clipboardData}
-          onChangeText={setClipboardData}
-          numberOfLines={6}
-        />
-        
-        <TouchableOpacity style={[styles.parseButton, { backgroundColor: theme.colors.primary }]} onPress={handleParseData}>
-          <Text style={styles.parseButtonText}>Parse Data</Text>
-        </TouchableOpacity>
-      </View>
-
-      {parsedPlayers.length > 0 && (
-        <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>2. Import Mode</Text>
-          <View style={styles.modeSelector}>
-            <TouchableOpacity
-              style={[
-                styles.modeButton,
-                { borderColor: theme.colors.border },
-                importMode === 'update' && { borderColor: theme.colors.primary, backgroundColor: theme.colors.card } // using card for active bg might need opacity but let's stick to theme
-              ]}
-              onPress={() => setImportMode('update')}
-            >
-              <Text style={[
-                styles.modeButtonText,
-                { color: theme.colors.text },
-                importMode === 'update' && { color: theme.colors.primary }
-              ]}>
-                Update Existing
-              </Text>
-              <Text style={[styles.modeHelpText, { color: theme.colors.muted }]}>Update existing players by name, add new ones</Text>
+    <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: MAX_CONTENT_WIDTH, backgroundColor: theme.colors.background }}>
+        <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+              <Text style={[styles.backButtonText, { color: theme.colors.primary }]}>← Back</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.modeButton,
-                { borderColor: theme.colors.border },
-                importMode === 'add-new' && { borderColor: theme.colors.primary, backgroundColor: theme.colors.card }
-              ]}
-              onPress={() => setImportMode('add-new')}
-            >
-              <Text style={[
-                styles.modeButtonText,
-                { color: theme.colors.text },
-                importMode === 'add-new' && { color: theme.colors.primary }
-              ]}>
-                Add New Only
-              </Text>
-              <Text style={[styles.modeHelpText, { color: theme.colors.muted }]}>Always create new players, even if names match</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>Import Players</Text>
+          </View>
+
+          <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>1. Paste Clipboard Data</Text>
+            <Text style={[styles.helpText, { color: theme.colors.muted }]}>
+              Copy data from Excel with columns: #, NAME, Share, Cell, Level
+            </Text>
+            <Text style={[styles.sampleLabel, { color: theme.colors.text }]}>Sample format:</Text>
+            <Text style={[styles.sampleData, { backgroundColor: theme.colors.card, color: theme.colors.text }]}>{sampleData}</Text>
+
+            <TextInput
+              style={[styles.textArea, { borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, color: theme.colors.text }]}
+              multiline
+              placeholder="Paste your clipboard data here..."
+              placeholderTextColor={theme.colors.muted}
+              value={clipboardData}
+              onChangeText={setClipboardData}
+              numberOfLines={6}
+            />
+
+            <TouchableOpacity style={[styles.parseButton, { backgroundColor: theme.colors.primary }]} onPress={handleParseData}>
+              <Text style={styles.parseButtonText}>Parse Data</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      )}
 
-      {parsedPlayers.length > 0 && (
-        <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>3. Preview ({parsedPlayers.length} players)</Text>
-          <ScrollView style={[styles.previewContainer, { borderColor: theme.colors.border }]} nestedScrollEnabled>
-            {parsedPlayers.map((player, index) => (
-              <View key={index} style={[styles.playerPreview, { borderBottomColor: theme.colors.border }]}>
-                <Text style={[styles.playerName, { color: theme.colors.text }]}>{player.displayName}</Text>
-                <Text style={[styles.playerDetail, { color: theme.colors.muted }]}>Skill: {player.skill} | Phone: {player.phone}</Text>
-                <View style={styles.shareRow}>
-                  <Text style={[styles.shareLabel, { color: theme.colors.text }]}>
-                    Share: {getShareTypeLabel(player.shareType)}
+          {parsedPlayers.length > 0 && (
+            <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>2. Import Mode</Text>
+              <View style={styles.modeSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.modeButton,
+                    { borderColor: theme.colors.border },
+                    importMode === 'update' && { borderColor: theme.colors.primary, backgroundColor: theme.colors.card } // using card for active bg might need opacity but let's stick to theme
+                  ]}
+                  onPress={() => setImportMode('update')}
+                >
+                  <Text style={[
+                    styles.modeButtonText,
+                    { color: theme.colors.text },
+                    importMode === 'update' && { color: theme.colors.primary }
+                  ]}>
+                    Update Existing
                   </Text>
-                  {player.shareType === 'C' && (
-                    <TextInput
-                      style={[styles.customPercentageInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
-                      value={player.sharePercentage.toString()}
-                      onChangeText={(text) => {
-                        const percentage = parseInt(text) || 0;
-                        handleUpdateSharePercentage(index, Math.min(100, Math.max(0, percentage)));
-                      }}
-                      keyboardType="numeric"
-                      placeholder="0-100"
-                      placeholderTextColor={theme.colors.muted}
-                    />
-                  )}
-                  <Text style={[styles.percentageText, { color: theme.colors.muted }]}>({player.sharePercentage}%)</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+                  <Text style={[styles.modeHelpText, { color: theme.colors.muted }]}>Update existing players by name, add new ones</Text>
+                </TouchableOpacity>
 
-      {parsedPlayers.length > 0 && (
-        <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity 
-            style={[styles.importButton, { backgroundColor: theme.colors.primary }, isImporting && styles.importButtonDisabled]}
-            onPress={handleImport}
-            disabled={isImporting}
-          >
-            <Text style={styles.importButtonText}>
-              {isImporting 
-                ? 'Importing...' 
-                : importResults 
-                  ? `✓ Imported: ${importResults.imported}, Updated: ${importResults.updated}${importResults.errors?.length > 0 ? `, Errors: ${importResults.errors.length}` : ''}`
-                  : `Import ${parsedPlayers.length} Players`
-              }
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </ScrollView>
+                <TouchableOpacity
+                  style={[
+                    styles.modeButton,
+                    { borderColor: theme.colors.border },
+                    importMode === 'add-new' && { borderColor: theme.colors.primary, backgroundColor: theme.colors.card }
+                  ]}
+                  onPress={() => setImportMode('add-new')}
+                >
+                  <Text style={[
+                    styles.modeButtonText,
+                    { color: theme.colors.text },
+                    importMode === 'add-new' && { color: theme.colors.primary }
+                  ]}>
+                    Add New Only
+                  </Text>
+                  <Text style={[styles.modeHelpText, { color: theme.colors.muted }]}>Always create new players, even if names match</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {parsedPlayers.length > 0 && (
+            <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>3. Preview ({parsedPlayers.length} players)</Text>
+              <ScrollView style={[styles.previewContainer, { borderColor: theme.colors.border }]} nestedScrollEnabled>
+                {parsedPlayers.map((player, index) => (
+                  <View key={index} style={[styles.playerPreview, { borderBottomColor: theme.colors.border }]}>
+                    <Text style={[styles.playerName, { color: theme.colors.text }]}>{player.displayName}</Text>
+                    <Text style={[styles.playerDetail, { color: theme.colors.muted }]}>Skill: {player.skill} | Phone: {player.phone}</Text>
+                    <View style={styles.shareRow}>
+                      <Text style={[styles.shareLabel, { color: theme.colors.text }]}>
+                        Share: {getShareTypeLabel(player.shareType)}
+                      </Text>
+                      {player.shareType === 'C' && (
+                        <TextInput
+                          style={[styles.customPercentageInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
+                          value={player.sharePercentage.toString()}
+                          onChangeText={(text) => {
+                            const percentage = parseInt(text) || 0;
+                            handleUpdateSharePercentage(index, Math.min(100, Math.max(0, percentage)));
+                          }}
+                          keyboardType="numeric"
+                          placeholder="0-100"
+                          placeholderTextColor={theme.colors.muted}
+                        />
+                      )}
+                      <Text style={[styles.percentageText, { color: theme.colors.muted }]}>({player.sharePercentage}%)</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {parsedPlayers.length > 0 && (
+            <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+              <TouchableOpacity
+                style={[styles.importButton, { backgroundColor: theme.colors.primary }, isImporting && styles.importButtonDisabled]}
+                onPress={handleImport}
+                disabled={isImporting}
+              >
+                <Text style={styles.importButtonText}>
+                  {isImporting
+                    ? 'Importing...'
+                    : importResults
+                      ? `✓ Imported: ${importResults.imported}, Updated: ${importResults.updated}${importResults.errors?.length > 0 ? `, Errors: ${importResults.errors.length}` : ''}`
+                      : `Import ${parsedPlayers.length} Players`
+                  }
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </View>
   );
 };
 

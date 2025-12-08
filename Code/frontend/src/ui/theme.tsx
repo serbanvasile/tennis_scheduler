@@ -1,6 +1,8 @@
 import React from 'react';
 import { ColorValue } from 'react-native';
 
+export const MAX_CONTENT_WIDTH = '50%';
+
 export type Theme = {
   name: 'light' | 'dark';
   colors: {
@@ -40,17 +42,17 @@ export const lightTheme: Theme = {
 export const darkTheme: Theme = {
   name: 'dark',
   colors: {
-    background: '#0f1720',
-    surface: '#0b1220',
-    primary: '#4f9fff',
-    accent: '#9b8cff',
-    text: '#e6eef8',
-    muted: '#9aa6b2',
-    border: '#1f2933',
-    error: '#ff6b6b',
-    errorBackground: 'rgba(255, 107, 107, 0.1)', // Safe dark mode error bg
-    card: '#0b1220',
-    inputBackground: '#091022',
+    background: '#121212', // Deep Black
+    surface: '#1E1E1E', // Dark Gray Surface
+    primary: '#FFC107', // Amber/Gold
+    accent: '#FFD54F', // Light Amber
+    text: '#FFFFFF',
+    muted: '#B0BEC5',
+    border: '#2C2C2C',
+    error: '#CF6679',
+    errorBackground: 'rgba(207, 102, 121, 0.1)',
+    card: '#1E1E1E',
+    inputBackground: '#2C2C2C',
     shadowColor: '#000'
   }
 };
@@ -58,10 +60,10 @@ export const darkTheme: Theme = {
 const ThemeContext = React.createContext<{
   theme: Theme;
   setThemeName: (name: 'light' | 'dark') => void;
-}>({ theme: lightTheme, setThemeName: () => {} });
+}>({ theme: lightTheme, setThemeName: () => { } });
 
 export const ThemeProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }) => {
-  const [themeName, setThemeName] = React.useState<'light' | 'dark'>('light');
+  const [themeName, setThemeName] = React.useState<'light' | 'dark'>('dark');
   const theme = themeName === 'light' ? lightTheme : darkTheme;
 
   return (

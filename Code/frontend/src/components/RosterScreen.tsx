@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -8,943 +9,462 @@ import {
   SafeAreaView,
   Modal,
   TextInput,
+  ActivityIndicator,
   Alert,
-  ScrollView,
-  Platform
+  ScrollView
 } from 'react-native';
-import { Player } from '../types';
 import { databaseService } from '../database/sqlite-service';
-import { ImportScreen } from './ImportScreen';
-import { useTheme } from '../ui/theme';
+import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
+import { Member, MemberTeam, Sport, Role, Position, Team } from '../types';
+import { ScreenHeader } from './ScreenHeader';
+import { ConfirmationModal } from './ConfirmationModal';
 
-const SKILL_LEVELS = [3, 3.5, 3.75, 4, 4.25, 4.5, 5, 5.5, 6];
-
-interface EditPlayerModalProps {
-  visible: boolean;
-  player: Player | null;
-  onClose: () => void;
-  onSave: (player: Player) => void;
-  onDelete?: (playerId: string) => void;
-}
-
-// Phone number formatting function
-const formatPhoneNumber = (value: string): string => {
-  // Remove all non-digits
-  const phoneNumber = value.replace(/\D/g, '');
-  
-  // Format as (XXX) XXX-XXXX
-  if (phoneNumber.length <= 3) {
-    return phoneNumber;
-  } else if (phoneNumber.length <= 6) {
-    return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
-  } else {
-    return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
-  }
+// Tab Component
+const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: string) => void }) => {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.tabContainer}>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'General' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        onPress={() => onChange('General')}
+      >
+        <Text style={[styles.tabText, { color: theme.colors.text }]}>General</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'Teams' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        onPress={() => onChange('Teams')}
+      >
+        <Text style={[styles.tabText, { color: theme.colors.text }]}>Teams & Roles</Text>
+      </TouchableOpacity>
+    </View>
+  );
 };
 
-function EditPlayerModal({ visible, player, onClose, onSave, onDelete }: EditPlayerModalProps) {
-  const [editedPlayer, setEditedPlayer] = useState<Player | null>(player);
+export default function RosterScreen() {
   const { theme } = useTheme();
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
 
-  React.useEffect(() => {
-    setEditedPlayer(player);
-  }, [player]);
+  // Lookups
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
+  const [allRoles, setAllRoles] = useState<Role[]>([]);
+  const [allPositions, setAllPositions] = useState<Position[]>([]);
+  const [allSports, setAllSports] = useState<Sport[]>([]);
 
-  const handleSave = () => {
-    console.log('🔄 Modal Save button clicked!');
-    console.log('📝 editedPlayer:', editedPlayer);
-    
-    if (!editedPlayer) {
-      console.log('❌ No edited player found');
-      return;
-    }
-    
-    // Validate required fields
-    if (!editedPlayer.displayName?.trim()) {
-      console.log('❌ Validation failed: Name is required');
-      Alert.alert('Error', 'Name is required');
-      return;
-    }
-    
-    if (!SKILL_LEVELS.includes(editedPlayer.skill)) {
-      console.log('❌ Validation failed: Invalid skill level:', editedPlayer.skill);
-      Alert.alert('Error', 'Please select a valid skill level');
-      return;
-    }
+  // Edit State
+  const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState('General');
 
-    console.log('✅ Validation passed, calling onSave with:', editedPlayer);
-    onSave(editedPlayer);
-    onClose();
-  };
+  // Form State - General
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [gender, setGender] = useState('');
 
-  const handleDelete = () => {
-    if (!editedPlayer) return;
-    
-    // Use web-compatible confirmation dialog
-    const confirmed = Platform.OS === 'web' 
-      ? window.confirm(`Are you sure you want to delete ${editedPlayer.displayName}?`)
-      : true; // For native, we'll use Alert.alert below
-    
-    if (Platform.OS === 'web') {
-      if (confirmed) {
-        onDelete?.(editedPlayer.id);
-        onClose();
-      }
-    } else {
-      Alert.alert(
-        'Delete Player',
-        `Are you sure you want to delete ${editedPlayer.displayName}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              onDelete?.(editedPlayer.id);
-              onClose();
-            }
-          }
-        ]
-      );
-    }
-  };
+  // Form State - Teams [{ teamId, roleIds[], positionIds[] }]
+  const [memberTeams, setMemberTeams] = useState<any[]>([]);
+  const [filterText, setFilterText] = useState('');
 
-  if (!editedPlayer) return null;
+  // Confirmation
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, isDestructive: false });
 
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
-        <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-            {player?.id.startsWith('new-') ? 'Add Player' : 'Edit Player'}
-          </Text>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity 
-              style={[styles.headerCancelButton, { backgroundColor: theme.colors.muted }]}
-              onPress={onClose}
-            >
-              <Text style={styles.headerCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.headerSaveButton, { backgroundColor: theme.colors.primary }]}
-              onPress={handleSave}
-            >
-              <Text style={styles.headerSaveText}>Save Changes</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <ScrollView style={styles.modalContent}>
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Name *</Text>
-            <TextInput
-              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
-              value={editedPlayer.displayName || ''}
-              onChangeText={(text) => setEditedPlayer({ ...editedPlayer, displayName: text })}
-              placeholder="Enter player name"
-              placeholderTextColor={theme.colors.muted}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Skill Level *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.skillScrollView}>
-              <View style={styles.skillPickerContainer}>
-                {SKILL_LEVELS.map((skill) => (
-                  <TouchableOpacity
-                    key={skill}
-                    style={[
-                      styles.skillOption,
-                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-                      editedPlayer.skill === skill && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                    ]}
-                    onPress={() => setEditedPlayer({ ...editedPlayer, skill })}
-                  >
-                    <Text style={[
-                      styles.skillOptionText,
-                      { color: theme.colors.text },
-                      editedPlayer.skill === skill && { color: 'white' }
-                    ]}>
-                      {skill}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Handedness</Text>
-            <View style={[styles.segmentedControl, { borderColor: theme.colors.border }]}>
-              {(['L', 'R', 'A'] as const).map((hand) => (
-                <TouchableOpacity
-                  key={hand}
-                  style={[
-                    styles.segmentButton,
-                    { backgroundColor: theme.colors.card },
-                    editedPlayer.handed === hand && { backgroundColor: theme.colors.primary }
-                  ]}
-                  onPress={() => setEditedPlayer({ ...editedPlayer, handed: hand })}
-                >
-                  <Text style={[
-                    styles.segmentText,
-                    { color: theme.colors.text },
-                    editedPlayer.handed === hand && { color: 'white', fontWeight: '600' }
-                  ]}>
-                    {hand === 'L' ? 'Left' : hand === 'R' ? 'Right' : 'Ambidextrous'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Phone</Text>
-            <TextInput
-              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
-              value={editedPlayer.phone || ''}
-              onChangeText={(text) => {
-                const formatted = formatPhoneNumber(text);
-                setEditedPlayer({ ...editedPlayer, phone: formatted });
-              }}
-              placeholder="(508) 555-1234"
-              placeholderTextColor={theme.colors.muted}
-              keyboardType="phone-pad"
-              maxLength={14}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Email</Text>
-            <TextInput
-              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
-              value={editedPlayer.email || ''}
-              onChangeText={(text) => setEditedPlayer({ ...editedPlayer, email: text })}
-              placeholder="player@email.com"
-              placeholderTextColor={theme.colors.muted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          {!player?.id.startsWith('new-') && (player?.createdAt || player?.updatedAt) && (
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Timestamps</Text>
-              {player?.createdAt && (
-                <Text style={[styles.timestampText, { color: theme.colors.muted }]}>
-                  Created: {new Date(player.createdAt).toLocaleString()}
-                </Text>
-              )}
-              {player?.updatedAt && (
-                <Text style={[styles.timestampText, { color: theme.colors.muted }]}>
-                  Updated: {new Date(player.updatedAt).toLocaleString()}
-                </Text>
-              )}
-            </View>
-          )}
-
-          {!player?.id.startsWith('new-') && onDelete && (
-            <TouchableOpacity style={[styles.deleteButton, { backgroundColor: theme.colors.error }]} onPress={handleDelete}>
-              <Text style={styles.deleteButtonText}>Delete Player</Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
   );
-}
 
-function PlayerRow({ player, onEdit }: { player: Player; onEdit: (player: Player) => void }) {
-  const { theme } = useTheme();
-
-  const getShareLabel = (shareType?: string) => {
-    switch (shareType) {
-      case 'F': return 'Full';
-      case 'TQ': return '3/4';
-      case 'TT': return '2/3';
-      case 'H': return '1/2';
-      case 'OT': return '1/3';
-      case 'R': return 'Reserve';
-      case 'C': return 'Custom';
-      default: return shareType || 'R';
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [membersData, teamsData, lookups] = await Promise.all([
+        databaseService.getMembers(),
+        databaseService.getTeams(),
+        databaseService.getLookups()
+      ]);
+      setMembers(membersData);
+      setAllTeams(teamsData);
+      if (lookups) {
+        setAllRoles(lookups.roles || []);
+        setAllPositions(lookups.positions || []);
+        setAllSports(lookups.sports || []);
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to load roster data');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const formatLastUpdated = (timestamp?: string) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) return `Updated ${date.toLocaleString()}`;
-    if (diffInHours < 24) return `Updated ${date.toLocaleString()}`;
-    
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `Updated ${date.toLocaleString()}`;
-    
-    return `Updated ${date.toLocaleString()}`;
+  const handleEdit = async (member: Member) => {
+    setEditingMemberId(member.member_id);
+    setActiveTab('General');
+    setFilterText('');
+
+    try {
+      const details = await databaseService.getMemberDetails(member.member_id);
+      setFirstName(details.first_name);
+      setLastName(details.last_name);
+      setDisplayName(details.display_name || '');
+      setGender(details.gender || '');
+
+      const mappedTeams = (details.teams || []).map(t => ({
+        teamId: t.team_id,
+        roleIds: t.roles.map(r => r.role_id),
+        positionIds: t.positions.map(p => p.position_id)
+      }));
+      setMemberTeams(mappedTeams);
+
+      setModalVisible(true);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load member details');
+    }
   };
 
-  return (
-    <TouchableOpacity style={[styles.playerRow, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]} onPress={() => onEdit(player)}>
-      <View style={styles.playerInfo}>
-        <Text style={[styles.playerName, { color: theme.colors.text }]}>{player.displayName}</Text>
-        <View style={styles.playerDetails}>
-          <Text style={[styles.playerDetail, { color: theme.colors.muted }]}>Skill: {player.skill}</Text>
-          <Text style={[styles.playerDetail, { color: theme.colors.muted }]}>
-            Hand: {player.handed === 'L' ? 'Left' : player.handed === 'R' ? 'Right' : 'Ambidextrous'}
+  const resetForm = () => {
+    setEditingMemberId(null);
+    setFirstName('');
+    setLastName('');
+    setDisplayName('');
+    setGender('');
+    setMemberTeams([]);
+    setFilterText('');
+    setActiveTab('General');
+  };
+
+  const handleSave = async () => {
+    if (!firstName || !lastName) {
+      Alert.alert('Error', 'First and Last Name are required');
+      return;
+    }
+
+    try {
+      const memberData = { first_name: firstName, last_name: lastName, display_name: displayName, gender };
+
+      if (editingMemberId) {
+        await databaseService.updateMember(editingMemberId, memberData, memberTeams);
+      } else {
+        await databaseService.createMember(memberData, memberTeams);
+      }
+      setModalVisible(false);
+      resetForm();
+      loadData();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save member');
+    }
+  };
+
+  const promptDelete = () => {
+    if (!editingMemberId) return;
+    setConfirmConfig({
+      title: 'Delete Member?',
+      message: 'Are you sure you want to delete this member?',
+      isDestructive: true,
+      onConfirm: async () => {
+        await databaseService.deleteMember(editingMemberId);
+        setConfirmVisible(false);
+        setModalVisible(false);
+        loadData();
+      }
+    });
+    setConfirmVisible(true);
+  };
+
+  const promptDeleteAll = () => {
+    setConfirmConfig({
+      title: 'Delete All Members?',
+      message: 'This will permanently remove ALL members. This cannot be undone.',
+      isDestructive: true,
+      onConfirm: async () => {
+        await databaseService.deleteAllMembers();
+        setConfirmVisible(false);
+        loadData();
+      }
+    });
+    setConfirmVisible(true);
+  };
+
+  const toggleTeam = (teamId: number) => {
+    const exists = memberTeams.find(mt => mt.teamId === teamId);
+    if (exists) {
+      setMemberTeams(prev => prev.filter(mt => mt.teamId !== teamId));
+    } else {
+      setMemberTeams(prev => [...prev, { teamId, roleIds: [], positionIds: [] }]);
+    }
+  };
+
+  const toggleRole = (teamId: number, roleId: number) => {
+    setMemberTeams(prev => prev.map(mt => {
+      if (mt.teamId !== teamId) return mt;
+      const hasRole = mt.roleIds.includes(roleId);
+      return {
+        ...mt,
+        roleIds: hasRole ? mt.roleIds.filter((id: number) => id !== roleId) : [...mt.roleIds, roleId]
+      };
+    }));
+  };
+
+  const togglePosition = (teamId: number, positionId: number) => {
+    setMemberTeams(prev => prev.map(mt => {
+      if (mt.teamId !== teamId) return mt;
+      const hasPos = mt.positionIds.includes(positionId);
+      return {
+        ...mt,
+        positionIds: hasPos ? mt.positionIds.filter((id: number) => id !== positionId) : [...mt.positionIds, positionId]
+      };
+    }));
+  };
+
+  // Filtered Teams Logic
+  const filteredTeams = allTeams.filter(t => {
+    if (!filterText) return true;
+    const search = filterText.toLowerCase();
+    const sportName = allSports.find(s => s.sport_id === t.sport_id)?.name.toLowerCase() || '';
+    return t.name.toLowerCase().includes(search) || sportName.includes(search);
+  });
+
+  const renderMemberCard = ({ item }: { item: Member }) => (
+    <TouchableOpacity style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} onPress={() => handleEdit(item)}>
+      <View style={styles.cardContent}>
+        <View style={[styles.avatar, { backgroundColor: 'black', borderWidth: 1, borderColor: theme.colors.primary }]}>
+          <Text style={[styles.avatarText, { color: theme.colors.primary }]}>{item.first_name[0]}{item.last_name[0]}</Text>
+        </View>
+        <View style={styles.textContainer}>
+          <Text style={[styles.nameText, { color: theme.colors.text }]}>
+            {item.last_name}, {item.first_name} {item.display_name ? `(${item.display_name})` : ''}
           </Text>
-          <Text style={[styles.playerDetail, { color: theme.colors.muted }]}>
-            Share: {getShareLabel(player.shareType)} ({player.sharePercentage || 0}%)
-          </Text>
-          {player.updatedAt && (
-            <Text style={[styles.playerTimestamp, { color: theme.colors.muted }]}>{formatLastUpdated(player.updatedAt)}</Text>
+          {item.teams && item.teams.length > 0 ? (
+            <>
+              {item.teams.map((t: any, idx: number) => (
+                <View key={idx}>
+                  <Text style={{ color: theme.colors.primary, fontSize: 14, marginTop: 2 }}>
+                    <Text style={{ fontWeight: 'bold' }}>{t.sport_name}</Text>
+                    <Text style={{ fontWeight: 'normal' }}> • {t.team_name}</Text>
+                  </Text>
+                  <View style={{ marginTop: 4 }}>
+                    <Text style={{ color: theme.colors.muted, fontSize: 12 }}>
+                      {t.role_names ? `Role: ${t.role_names.split(',').join(', ')}` : ''}
+                      {t.role_names && t.position_names ? ' • ' : ''}
+                      {t.position_names ? `Position: ${t.position_names.split(',').join(', ')}` : ''}
+                      {!t.role_names && !t.position_names ? 'No role/position assigned' : ''}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : (
+            <Text style={{ color: theme.colors.muted, fontSize: 14, marginTop: 2 }}>No Teams Assigned</Text>
           )}
         </View>
-        {player.phone && (
-          <Text style={[styles.playerContact, { color: theme.colors.text }]}>{player.phone}</Text>
-        )}
-        {player.email && (
-          <Text style={[styles.playerContact, { color: theme.colors.text }]}>{player.email}</Text>
-        )}
-      </View>
-      <View style={[styles.skillBadge, { backgroundColor: theme.colors.primary }]}>
-        <Text style={styles.skillText}>{player.skill}</Text>
       </View>
     </TouchableOpacity>
   );
-}
-
-export default function RosterScreen() {
-  console.log('🎾 RosterScreen rendered');
-  console.log('🌐 Platform.OS:', Platform.OS);
-  
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
-  const [showImportScreen, setShowImportScreen] = useState(false);
-  const { theme } = useTheme();
-
-  useEffect(() => {
-    initializeAndLoad();
-  }, []);
-
-  // Database is always initialized on component mount
-  useEffect(() => {
-    initializeAndLoad();
-  }, []);
-
-
-
-  const initializeAndLoad = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('🚀 Initializing database (force=true)');
-      await databaseService.init(true);
-      
-      setInitialized(true);
-      await loadPlayers();
-    } catch (err) {
-      setError('Failed to initialize database');
-      console.error('💥 Error initializing database:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadPlayers = async () => {
-    console.log('📥 loadPlayers called');
-    try {
-      console.log('🗄️ Loading from database service');
-      const dbPlayers = await databaseService.getPlayers(true);
-      console.log('🗄️ Database returned:', dbPlayers.length, 'players');
-      console.log('🗄️ Setting players state with:', dbPlayers);
-      setPlayers(dbPlayers);
-      setError(null); // Clear any previous errors
-    } catch (err) {
-      console.error('💥 loadPlayers failed:', err);
-      setError('Failed to load players: ' + (err instanceof Error ? err.message : String(err)));
-    }
-  };
-
-  const handleAddPlayer = () => {
-    console.log('➕ Add Player button clicked');
-    const newPlayer: Player = {
-      id: `new-${Date.now()}`,
-      displayName: '',
-      skill: 3.5,
-      handed: 'R'
-    };
-    console.log('🆕 Created new player template:', newPlayer);
-    setEditingPlayer(newPlayer);
-    setModalVisible(true);
-    console.log('🎭 Modal opened for new player');
-  };
-
-  const handleEditPlayer = (player: Player) => {
-    setEditingPlayer(player);
-    setModalVisible(true);
-  };
-
-  const handleSavePlayer = async (player: Player) => {
-    console.log('🚀 handleSavePlayer called with:', player);
-    console.log('🌐 Is web platform:', databaseService.isWebPlatform());
-    console.log('🆔 Player ID:', player.id, 'Starts with new?', player.id.startsWith('new-'));
-    
-    try {
-      // For now, let's focus only on web since that's what's being used
-      if (player.id.startsWith('new-')) {
-        console.log('➕ Adding new player');
-        const playerData = {
-          displayName: player.displayName,
-          skill: player.skill,
-          handed: player.handed,
-          phone: player.phone,
-          email: player.email
-        };
-        console.log('📤 Calling databaseService.addPlayer with:', playerData);
-        const playerId = await databaseService.addPlayer(playerData, true);
-        console.log('✅ Database addPlayer returned ID:', playerId);
-        
-      } else {
-        console.log('✏️ Updating existing player');
-        const updateData = {
-          displayName: player.displayName,
-          skill: player.skill,
-          handed: player.handed,
-          phone: player.phone,
-          email: player.email
-        };
-        console.log('📤 Calling databaseService.updatePlayer with ID:', player.id, 'data:', updateData);
-        await databaseService.updatePlayer(player.id, updateData, true);
-        console.log('✅ Database updatePlayer completed');
-      }
-      
-      console.log('🔄 Reloading from database');
-      await loadPlayers();
-      console.log('🎉 Save operation completed!');
-      
-      // Close the modal after successful save
-      setModalVisible(false);
-      setEditingPlayer(null);
-    } catch (err) {
-      console.error('💥 Save operation failed:', err);
-      setError('Failed to save player: ' + (err instanceof Error ? err.message : String(err)));
-    }
-  };
-
-  const handleDeletePlayer = async (playerId: string) => {
-    console.log('🗑️ handleDeletePlayer called with ID:', playerId);
-    
-    try {
-      console.log('🗑️ Deleting player from database');
-      await databaseService.deletePlayer(playerId, true);
-      console.log('✅ Database deletePlayer completed');
-      
-      console.log('🔄 Reloading from database');
-      await loadPlayers();
-      console.log('🎉 Delete operation completed!');
-    } catch (err) {
-      console.error('💥 Delete operation failed:', err);
-      setError('Failed to delete player: ' + (err instanceof Error ? err.message : String(err)));
-    }
-  };
-
-  const handleClearAllPlayers = () => {
-    console.log('🧹 Clear All Players button clicked');
-    
-    // Use browser confirm for web compatibility
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm(
-        'Are you sure you want to delete ALL players from the roster?\n\nThis action cannot be undone.'
-      );
-      
-      if (confirmed) {
-        performClearAll();
-      }
-    } else {
-      // Use React Native Alert for mobile
-      Alert.alert(
-        'Clear All Players',
-        'Are you sure you want to delete ALL players from the roster? This action cannot be undone.',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Delete All',
-            style: 'destructive',
-            onPress: performClearAll,
-          },
-        ]
-      );
-    }
-  };
-
-  const performClearAll = async () => {
-    try {
-      console.log('🧹 Proceeding with clear all players');
-      
-      // Clear any existing errors first
-      setError(null);
-      setLoading(true);
-      
-      await databaseService.clearAllPlayers(true);
-      console.log('🧹 All players cleared successfully');
-      
-      // Force reload from database 
-      console.log('🔄 Reloading players after clear all...');
-      await loadPlayers();
-      console.log('🔄 Roster refreshed after clear all');
-      
-    } catch (error) {
-      console.error('💥 performClearAll failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to clear all players';
-      setError(errorMessage);
-      
-      if (Platform.OS === 'web') {
-        window.alert('Error: ' + errorMessage);
-      } else {
-        Alert.alert('Error', errorMessage);
-      }
-    } finally {
-      console.log('🔄 Clearing loading state');
-      setLoading(false);
-    }
-  };
-
-  const sortedRoster = [...players].sort((a, b) => 
-    (a.displayName || '').localeCompare(b.displayName || '')
-  );
-
-  // Show loading state during initialization
-  if (!initialized && loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={styles.centered}>
-          <Text style={[styles.loadingText, { color: theme.colors.muted }]}>Initializing database...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Show error state if initialization failed
-  if (error && !initialized) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={styles.centered}>
-          <Text style={[styles.errorText, { color: theme.colors.error }]}>Database Error</Text>
-          <Text style={[styles.errorDetail, { color: theme.colors.muted }]}>{error}</Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.colors.primary }]} onPress={initializeAndLoad}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Tennis Roster</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity style={[styles.clearAllButton, { backgroundColor: theme.colors.error }]} onPress={handleClearAllPlayers}>
-            <Text style={styles.clearAllButtonText}>Clear All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.importButton, { backgroundColor: theme.colors.accent }]} onPress={() => setShowImportScreen(true)}>
-            <Text style={styles.importButtonText}>Import</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={handleAddPlayer}>
-            <Text style={styles.addButtonText}>+ Add</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={[styles.statsRow, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.statsText, { color: theme.colors.muted }]}>{players.length} players</Text>
-        <Text style={[styles.statsText, { color: theme.colors.muted }]}> 
-          Avg skill: {players.length > 0 ? (players.reduce((sum: number, p: Player) => sum + p.skill, 0) / players.length).toFixed(1) : '0.0'}
-        </Text>
-        {loading && <Text style={[styles.loadingIndicator, { color: theme.colors.muted }]}>Syncing...</Text>}
-        {!loading && players.length === 0 && !error && (
-          <Text style={[styles.emptyStateText, { color: theme.colors.muted }]}>No players in roster. Use Import or Add to get started.</Text>
-        )}
-      </View>
-
-      {error && (
-        <View style={[styles.errorContainer, { backgroundColor: theme.colors.errorBackground, borderColor: theme.colors.error }]}>
-          <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
-        </View>
-      )}
-
-      <FlatList
-        data={sortedRoster}
-        keyExtractor={(player) => player.id}
-        renderItem={({ item }) => (
-          <PlayerRow player={item} onEdit={handleEditPlayer} />
-        )}
-        style={styles.list}
-        showsVerticalScrollIndicator={false}
+      <ScreenHeader
+        title="Roster"
+        rightAction={
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
+              <Text style={styles.buttonTextWhite}>Delete All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => { resetForm(); setModalVisible(true); }}>
+              <Text style={styles.addButtonText}>+ Member</Text>
+            </TouchableOpacity>
+          </View>
+        }
       />
 
-      <EditPlayerModal
-        visible={modalVisible}
-        player={editingPlayer}
-        onClose={() => {
-          setModalVisible(false);
-          setEditingPlayer(null);
-        }}
-        onSave={handleSavePlayer}
-        onDelete={handleDeletePlayer}
-      />
-
-      {showImportScreen && (
-        <Modal visible={showImportScreen} animationType="slide" presentationStyle="fullScreen">
-          <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.surface }}>
-            <ImportScreen
-              onBack={async () => {
-                console.log('🔄 Returning from Import screen, refreshing roster...');
-                setShowImportScreen(false);
-                setLoading(true);
-                try {
-                  await loadPlayers(); // Refresh when returning from import
-                  console.log('🔄 Roster refreshed after returning from import');
-                } catch (error) {
-                  console.error('💥 Failed to refresh after returning from import:', error);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              onImportComplete={async () => {
-                console.log('🔄 Import completed, refreshing roster...');
-                setShowImportScreen(false);
-                setLoading(true);
-                try {
-                  await loadPlayers(); // Refresh the roster after import
-                  console.log('🔄 Roster refreshed after import');
-                } catch (error) {
-                  console.error('💥 Failed to refresh after import:', error);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-            />
-          </SafeAreaView>
-        </Modal>
+      {loading ? <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} /> : (
+        <FlatList
+          data={members}
+          keyExtractor={m => m.member_id.toString()}
+          renderItem={renderMemberCard}
+          contentContainerStyle={styles.list}
+        />
       )}
+
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>
+              {editingMemberId ? 'Edit Member' : 'New Member'}
+            </Text>
+
+            <Tabs activeTab={activeTab} onChange={setActiveTab} />
+
+            <ScrollView style={styles.modalContent}>
+              {activeTab === 'General' ? (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>First Name</Text>
+                    <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]} value={firstName} onChangeText={setFirstName} />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Last Name</Text>
+                    <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]} value={lastName} onChangeText={setLastName} />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Display Name (Optional)</Text>
+                    <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]} value={displayName} onChangeText={setDisplayName} />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Gender</Text>
+                    <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]} value={gender} onChangeText={setGender} placeholder="M/F/Other" placeholderTextColor={theme.colors.muted} />
+                  </View>
+                </>
+              ) : (
+                <View>
+                  <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Assigned Teams</Text>
+
+                  <TextInput
+                    style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 12 }]}
+                    placeholder="Filter teams..."
+                    placeholderTextColor={theme.colors.muted}
+                    value={filterText}
+                    onChangeText={setFilterText}
+                  />
+
+                  <View style={styles.chipContainer}>
+                    {filteredTeams.map(t => {
+                      const isSelected = memberTeams.some(mt => mt.teamId === t.team_id);
+                      return (
+                        <TouchableOpacity
+                          key={t.team_id}
+                          style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                          onPress={() => toggleTeam(t.team_id)}
+                        >
+                          <Text style={{ color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{t.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {filteredTeams.length === 0 && <Text style={{ color: theme.colors.muted }}>No teams found.</Text>}
+                  </View>
+
+                  {memberTeams.map(mt => {
+                    const team = allTeams.find(t => t.team_id === mt.teamId);
+                    if (!team) return null;
+
+                    const sportId = team.sport_id;
+                    const relevantPositions = allPositions.filter(p => !p.sport_id || p.sport_id === sportId);
+
+                    return (
+                      <View key={mt.teamId} style={[styles.teamDetailCard, { borderColor: theme.colors.border }]}>
+                        <Text style={[styles.teamDetailTitle, { color: theme.colors.primary }]}>{team.name} Settings</Text>
+
+                        <Text style={[styles.labelSmall, { color: theme.colors.text }]}>Roles:</Text>
+                        <View style={styles.chipContainer}>
+                          {allRoles.map(r => {
+                            const active = mt.roleIds.includes(r.role_id);
+                            return (
+                              <TouchableOpacity
+                                key={r.role_id}
+                                style={[styles.chipSmall, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                onPress={() => toggleRole(mt.teamId, r.role_id)}
+                              >
+                                <Text style={{ fontSize: 10, color: active ? 'black' : theme.colors.text, fontWeight: active ? 'bold' : 'normal' }}>{r.name}</Text>
+                              </TouchableOpacity>
+                            )
+                          })}
+                        </View>
+
+                        <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Positions:</Text>
+                        <View style={styles.chipContainer}>
+                          {relevantPositions.map(p => {
+                            const active = mt.positionIds.includes(p.position_id);
+                            return (
+                              <TouchableOpacity
+                                key={p.position_id}
+                                style={[styles.chipSmall, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                onPress={() => togglePosition(mt.teamId, p.position_id)}
+                              >
+                                <Text style={{ fontSize: 10, color: active ? 'black' : theme.colors.text, fontWeight: active ? 'bold' : 'normal' }}>{p.name}</Text>
+                              </TouchableOpacity>
+                            )
+                          })}
+                          {relevantPositions.length === 0 && <Text style={{ fontSize: 10, color: theme.colors.muted }}>No positions for this sport.</Text>}
+                        </View>
+                      </View>
+                    );
+                  })}
+                  {memberTeams.length === 0 && <Text style={{ color: theme.colors.muted, marginTop: 20 }}>Select a team above to configure roles.</Text>}
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              {editingMemberId ? (
+                <TouchableOpacity style={[styles.deleteButton, { backgroundColor: '#d9534f' }]} onPress={promptDelete}>
+                  <Text style={styles.buttonTextWhite}>Delete</Text>
+                </TouchableOpacity>
+              ) : <View style={{ flex: 1 }} />}
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.muted }]} onPress={() => setModalVisible(false)}><Text style={{ color: theme.colors.text }}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.colors.primary }]} onPress={handleSave}><Text style={styles.buttonTextBold}>Save</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <ConfirmationModal
+        visible={confirmVisible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmVisible(false)}
+        isDestructive={confirmConfig.isDestructive}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  addButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  clearAllButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  clearAllButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  importButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  importButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  statsText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  list: {
-    flex: 1,
-  },
-  playerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  playerInfo: {
-    flex: 1,
-  },
-  playerName: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  playerDetails: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  playerDetail: {
-    fontSize: 14,
-    marginRight: 16,
-  },
-  playerTimestamp: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
-  playerContact: {
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  skillBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    minWidth: 50,
-    alignItems: 'center',
-  },
-  skillText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  
-  // Modal styles
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  headerCancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  headerCancelText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  headerSaveButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  headerSaveText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  modalContent: {
-    flex: 1,
-    padding: 16,
-  },
-  formGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  timestampText: {
-    fontSize: 14,
-    marginBottom: 4,
-    fontFamily: 'monospace',
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-  },
-  segmentText: {
-    fontSize: 14,
-  },
-  deleteButton: {
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  deleteButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  
-  // Skill picker styles
-  skillScrollView: {
-    maxHeight: 60,
-  },
-  skillPickerContainer: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-  },
-  skillOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginRight: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  skillOptionText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  
-  // Loading and error styles
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingIndicator: {
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginTop: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  errorDetail: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  errorContainer: {
-    padding: 12,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  loadingText: {
-    fontSize: 16,
-  },
-  formActions: {
-    marginTop: 20,
-  },
-  editModalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cancelButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 1,
-    marginRight: 10,
-  },
-  cancelButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  saveButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 1,
-    marginLeft: 10,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-    textAlign: 'center',
-  },
+  container: { flex: 1 },
+  list: { padding: 16 },
+  card: { padding: 16, borderRadius: 8, borderWidth: 1, marginBottom: 12 },
+  cardContent: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  avatarText: { fontSize: 20, fontWeight: 'bold' },
+  textContainer: { flex: 1 },
+  nameText: { fontSize: 18, fontWeight: 'bold' },
+  detailText: { fontSize: 14, marginTop: 2 },
+  addButton: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
+  addButtonText: { color: 'black', fontWeight: 'bold' },
+  deleteButtonHeader: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, marginRight: 8 },
+  buttonTextWhite: { color: 'white', fontWeight: 'bold' },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
+  modalContainer: { width: '90%', maxWidth: MAX_CONTENT_WIDTH, maxHeight: '90%', borderRadius: 12, padding: 20, borderWidth: 1 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
+  modalContent: { flex: 1 },
+
+  tabContainer: { flexDirection: 'row', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#ccc' },
+  tab: { paddingVertical: 10, paddingHorizontal: 20 },
+  tabText: { fontWeight: '600' },
+
+  inputGroup: { marginBottom: 16 },
+  label: { marginBottom: 6, fontWeight: '500' },
+  input: { padding: 12, borderRadius: 8, borderWidth: 1 },
+
+  sectionHeader: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, marginTop: 10 },
+  chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1 },
+  chipSmall: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1 },
+
+  teamDetailCard: { padding: 12, borderWidth: 1, borderRadius: 8, marginBottom: 12 },
+  teamDetailTitle: { fontWeight: 'bold', marginBottom: 8 },
+  labelSmall: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
+
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
+  cancelButton: { padding: 12, borderRadius: 8, borderWidth: 1, minWidth: 80, alignItems: 'center' },
+  saveButton: { padding: 12, borderRadius: 8, minWidth: 100, alignItems: 'center' },
+  deleteButton: { padding: 12, borderRadius: 8, minWidth: 80, alignItems: 'center' },
+  buttonTextBold: { color: 'black', fontWeight: 'bold' }
 });
