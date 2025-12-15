@@ -127,7 +127,7 @@ class DatabaseService {
     return await response.json();
   }
 
-  async createMember(data: Partial<Member>, teams: any[]): Promise<any> {
+  async createMember(data: any, teams?: any[], contacts?: any[]): Promise<any> {
     const response = await fetch(`${this.API_URL}/members`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -136,13 +136,21 @@ class DatabaseService {
         lastName: data.last_name,
         displayName: data.display_name,
         gender: data.gender,
-        teams // [{ teamId, roleIds, positionIds }]
+        skill: data.skill,
+        dominant_side: data.dominant_side,
+        share: data.share,
+        share_type: data.share_type,
+        share_percentage: data.share_percentage,
+        phone: data.phone,
+        email: data.email,
+        teams,
+        contacts
       })
     });
     return await response.json();
   }
 
-  async updateMember(memberId: number, data: Partial<Member>, teams: any[]): Promise<any> {
+  async updateMember(memberId: number, data: any, teams: any[], contacts?: any[]): Promise<any> {
     const response = await fetch(`${this.API_URL}/members/${memberId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -151,7 +159,15 @@ class DatabaseService {
         lastName: data.last_name,
         displayName: data.display_name,
         gender: data.gender,
-        teams
+        skill: data.skill,
+        dominant_side: data.dominant_side,
+        share: data.share,
+        share_type: data.share_type,
+        share_percentage: data.share_percentage,
+        phone: data.phone,
+        email: data.email,
+        teams,
+        contacts
       })
     });
     return await response.json();
@@ -164,30 +180,6 @@ class DatabaseService {
 
   async deleteAllMembers(): Promise<any> {
     const response = await fetch(`${this.API_URL}/members`, { method: 'DELETE' });
-    return await response.json();
-  }
-
-  async getRoles(): Promise<Role[]> {
-    // Assuming generic roles for now, or fetch from lookup
-    // We don't have a dedicated getRoles endpoint yet in API-Server?
-    // I saw `roles` table. I should probably add a lookup for it or use getLookups if it included roles?
-    // For now, I'll add a simple fetch if I add the endpoint, or use hardcoded if acceptable, but DB is better.
-    // Let's assume I add /api/roles.
-    const response = await fetch(`${this.API_URL}/lookups`); // Assumes lookups logic or add /api/roles
-    // Wait, api-server `getLookups` (if exists) needs to checked.
-    // If not, I'll add `getRoles` to sqlite-service using a new endpoint I'll add to backend.
-    // Actually, let's just use `getLookups` pattern.
-    return [];
-  }
-
-  async getPositions(): Promise<Position[]> {
-    // Same here
-    const response = await fetch(`${this.API_URL}/lookups`);
-    return [];
-  }
-
-  async getLookups(): Promise<any> {
-    const response = await fetch(`${this.API_URL}/lookups`);
     return await response.json();
   }
 
@@ -224,22 +216,151 @@ class DatabaseService {
     }
   }
 
-  async createEvent(eventData: any): Promise<any> {
-    // Adapter: Frontend 'Event' -> Backend payload
-    const payload = {
-      name: eventData.title || eventData.name, // Handle legacy 'title' field
-      startDate: eventData.startDateTime || eventData.startDate,
-      endDate: eventData.endDateTime || eventData.endDate,
-      description: eventData.description,
-      venueIds: eventData.venues?.map((v: any) => v.id) || [], // Assuming UI sends venue objects
-      teamIds: eventData.teams?.map((t: any) => t.id) || []
-    };
-
+  async createEvent(eventData: {
+    name: string;
+    startDate: number;
+    endDate?: number;
+    description?: string;
+    // xref IDs
+    venueIds?: number[];
+    teamIds?: number[];
+    eventTypeIds?: number[];
+    systemIds?: number[];
+    courtIds?: number[];
+    fieldIds?: number[];
+    seasonId?: number;
+    isTournament?: boolean;
+    // Series
+    isSeriesEvent?: boolean;
+    repeatPeriod?: 'hours' | 'days' | 'weeks';
+    repeatInterval?: number;
+    totalEvents?: number;
+  }): Promise<any> {
     const response = await fetch(`${this.API_URL}/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(eventData)
     });
+    return await response.json();
+  }
+
+  async deleteEvent(eventId: number, deleteSeries = false): Promise<any> {
+    const url = `${this.API_URL}/events/${eventId}${deleteSeries ? '?deleteSeries=true' : ''}`;
+    const response = await fetch(url, { method: 'DELETE' });
+    return await response.json();
+  }
+
+  async updateEvent(eventId: number, eventData: {
+    name: string;
+    startDate: number;
+    description?: string;
+    venueIds?: number[];
+    eventTypeIds?: number[];
+    systemIds?: number[];
+    courtIds?: number[];
+    fieldIds?: number[];
+  }): Promise<any> {
+    const response = await fetch(`${this.API_URL}/events/${eventId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventData)
+    });
+    return await response.json();
+  }
+
+  async deleteAllEvents(): Promise<any> {
+    const response = await fetch(`${this.API_URL}/events`, { method: 'DELETE' });
+    return await response.json();
+  }
+
+  // --- VENUES CRUD ---
+
+  async updateVenue(venueId: number, name: string, address?: string, details?: any): Promise<any> {
+    const response = await fetch(`${this.API_URL}/venues/${venueId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, address, details })
+    });
+    return await response.json();
+  }
+
+  async deleteVenue(venueId: number): Promise<any> {
+    const response = await fetch(`${this.API_URL}/venues/${venueId}/delete`, { method: 'PUT' });
+    return await response.json();
+  }
+
+  async deleteAllVenues(): Promise<any> {
+    const response = await fetch(`${this.API_URL}/venues`, { method: 'DELETE' });
+    return await response.json();
+  }
+
+  // --- COURTS ---
+
+  async getVenueCourts(venueId: number): Promise<any[]> {
+    try {
+      const response = await fetch(`${this.API_URL}/venues/${venueId}/courts`);
+      return await response.json();
+    } catch (err) {
+      console.error('getVenueCourts failed', err);
+      return [];
+    }
+  }
+
+  async createCourt(venueId: number, name: string, surface?: string): Promise<any> {
+    const response = await fetch(`${this.API_URL}/venues/${venueId}/courts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, surface })
+    });
+    return await response.json();
+  }
+
+  async updateCourt(courtId: number, name: string, surface?: string): Promise<any> {
+    const response = await fetch(`${this.API_URL}/courts/${courtId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, surface })
+    });
+    return await response.json();
+  }
+
+  async deleteCourt(courtId: number): Promise<any> {
+    const response = await fetch(`${this.API_URL}/courts/${courtId}`, { method: 'DELETE' });
+    return await response.json();
+  }
+
+  // --- FIELDS ---
+
+  async getVenueFields(venueId: number): Promise<any[]> {
+    try {
+      const response = await fetch(`${this.API_URL}/venues/${venueId}/fields`);
+      return await response.json();
+    } catch (err) {
+      console.error('getVenueFields failed', err);
+      return [];
+    }
+  }
+
+  async createField(venueId: number, name: string, surface?: string): Promise<any> {
+    const response = await fetch(`${this.API_URL}/venues/${venueId}/fields`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, surface })
+    });
+    return await response.json();
+  }
+
+  async updateField(fieldId: number, name: string, surface?: string): Promise<any> {
+    const response = await fetch(`${this.API_URL}/fields/${fieldId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, surface })
+    });
+    return await response.json();
+  }
+
+  async deleteField(fieldId: number): Promise<any> {
+    const response = await fetch(`${this.API_URL}/fields/${fieldId}`, { method: 'DELETE' });
     return await response.json();
   }
 

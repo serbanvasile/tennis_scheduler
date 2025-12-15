@@ -11,13 +11,15 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  ScrollView
+  ScrollView,
+  Linking
 } from 'react-native';
 import { databaseService } from '../database/sqlite-service';
 import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
 import { Member, MemberTeam, Sport, Role, Position, Team } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
+import { ImportScreen } from './ImportScreen';
 
 // Tab Component
 const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: string) => void }) => {
@@ -36,6 +38,76 @@ const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: stri
       >
         <Text style={[styles.tabText, { color: theme.colors.text }]}>Teams & Roles</Text>
       </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'Contact' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        onPress={() => onChange('Contact')}
+      >
+        <Text style={[styles.tabText, { color: theme.colors.text }]}>Contact</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// Contact icon mapping with URL schemes
+const getContactUrl = (type: string, value: string): string | null => {
+  const cleanValue = value.replace(/[^\d+]/g, ''); // Clean phone numbers
+  switch (type.toLowerCase()) {
+    case 'phone':
+      return `sms:${cleanValue}`; // Open SMS/text messaging
+    case 'email':
+      return `mailto:${value}`;
+    case 'whatsapp':
+      return `https://wa.me/${cleanValue}`;
+    case 'signal':
+      return `https://signal.me/#p/${cleanValue}`;
+    default:
+      return null;
+  }
+};
+
+const getContactIcon = (type: string): string => {
+  switch (type.toLowerCase()) {
+    case 'phone':
+      return '💬'; // SMS/text
+    case 'email':
+      return '✉️'; // Email
+    case 'whatsapp':
+      return '📱'; // WhatsApp (using phone with arrow)
+    case 'signal':
+      return '🔒'; // Signal (secure messaging)
+    default:
+      return '📞'; // Default phone
+  }
+};
+
+// Contact Icons Component
+const ContactIcons = ({ contacts, theme }: { contacts: any[], theme: any }) => {
+  if (!contacts || contacts.length === 0) return null;
+
+  const handlePress = (type: string, value: string) => {
+    const url = getContactUrl(type, value);
+    if (url) {
+      Linking.openURL(url).catch(err => {
+        console.error('Failed to open URL:', err);
+        Alert.alert('Error', `Could not open ${type} app`);
+      });
+    }
+  };
+
+  return (
+    <View style={styles.contactIconsRow}>
+      {contacts.map((contact, idx) => (
+        <TouchableOpacity
+          key={idx}
+          style={[styles.contactIconButton, { borderColor: theme.colors.border }]}
+          onPress={(e) => {
+            e.stopPropagation(); // Prevent triggering card press
+            handlePress(contact.type, contact.value);
+          }}
+        >
+          <Text style={styles.contactIcon}>{getContactIcon(contact.type)}</Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 };
@@ -51,6 +123,7 @@ export default function RosterScreen() {
   const [allRoles, setAllRoles] = useState<Role[]>([]);
   const [allPositions, setAllPositions] = useState<Position[]>([]);
   const [allSports, setAllSports] = useState<Sport[]>([]);
+  const [allSkills, setAllSkills] = useState<any[]>([]);
 
   // Edit State
   const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
@@ -61,14 +134,42 @@ export default function RosterScreen() {
   const [lastName, setLastName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [gender, setGender] = useState('');
+  const [skill, setSkill] = useState('3.5');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [dominantSide, setDominantSide] = useState('R');
 
   // Form State - Teams [{ teamId, roleIds[], positionIds[] }]
   const [memberTeams, setMemberTeams] = useState<any[]>([]);
   const [filterText, setFilterText] = useState('');
 
+  // Form State - Contacts [{ type, value, label }]
+  const [memberContacts, setMemberContacts] = useState<any[]>([]);
+  const [newContactType, setNewContactType] = useState('phone');
+  const [newContactValue, setNewContactValue] = useState('');
+  const [newContactLabel, setNewContactLabel] = useState('preferred');
+
   // Confirmation
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, isDestructive: false });
+
+  // Import Modal
+  const [importModalVisible, setImportModalVisible] = useState(false);
+
+  // Roster Filter
+  const [rosterFilterText, setRosterFilterText] = useState('');
+
+  const handleImportClick = () => {
+    if (allTeams.length === 0) {
+      Alert.alert(
+        'No Teams Available',
+        'At least one team must be created before importing members. Please create a team first on the Teams screen.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    setImportModalVisible(true);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -90,6 +191,7 @@ export default function RosterScreen() {
         setAllRoles(lookups.roles || []);
         setAllPositions(lookups.positions || []);
         setAllSports(lookups.sports || []);
+        setAllSkills(lookups.skills || []);
       }
     } catch (e) {
       console.error(e);
@@ -109,14 +211,22 @@ export default function RosterScreen() {
       setFirstName(details.first_name);
       setLastName(details.last_name);
       setDisplayName(details.display_name || '');
-      setGender(details.gender || '');
+      setGender(details.gender || 'U');
+      setSkill(details.skill?.toString() || '3.5');
+      setPhone((details as any).phone || '');
+      setEmail((details as any).email || '');
+      setDominantSide((details as any).dominant_side || 'R');
 
-      const mappedTeams = (details.teams || []).map(t => ({
+      const mappedTeams = (details.teams || []).map((t: any) => ({
         teamId: t.team_id,
-        roleIds: t.roles.map(r => r.role_id),
-        positionIds: t.positions.map(p => p.position_id)
+        roleIds: t.roles.map((r: any) => r.role_id),
+        positionIds: t.positions.map((p: any) => p.position_id),
+        skillId: t.skill_id || null
       }));
       setMemberTeams(mappedTeams);
+
+      // Load contacts if available
+      setMemberContacts((details as any).contacts || []);
 
       setModalVisible(true);
     } catch (e) {
@@ -129,9 +239,17 @@ export default function RosterScreen() {
     setFirstName('');
     setLastName('');
     setDisplayName('');
-    setGender('');
+    setGender('U');
+    setSkill('3.5');
+    setPhone('');
+    setEmail('');
+    setDominantSide('R');
     setMemberTeams([]);
     setFilterText('');
+    setMemberContacts([]);
+    setNewContactType('phone');
+    setNewContactValue('');
+    setNewContactLabel('preferred');
     setActiveTab('General');
   };
 
@@ -142,12 +260,12 @@ export default function RosterScreen() {
     }
 
     try {
-      const memberData = { first_name: firstName, last_name: lastName, display_name: displayName, gender };
+      const memberData = { first_name: firstName, last_name: lastName, display_name: displayName, gender, skill: skill || '3.5', dominant_side: dominantSide, phone, email };
 
       if (editingMemberId) {
-        await databaseService.updateMember(editingMemberId, memberData, memberTeams);
+        await databaseService.updateMember(editingMemberId, memberData, memberTeams, memberContacts);
       } else {
-        await databaseService.createMember(memberData, memberTeams);
+        await databaseService.createMember(memberData, memberTeams, memberContacts);
       }
       setModalVisible(false);
       resetForm();
@@ -192,7 +310,7 @@ export default function RosterScreen() {
     if (exists) {
       setMemberTeams(prev => prev.filter(mt => mt.teamId !== teamId));
     } else {
-      setMemberTeams(prev => [...prev, { teamId, roleIds: [], positionIds: [] }]);
+      setMemberTeams(prev => [...prev, { teamId, roleIds: [], positionIds: [], skillId: null }]);
     }
   };
 
@@ -259,6 +377,8 @@ export default function RosterScreen() {
             <Text style={{ color: theme.colors.muted, fontSize: 14, marginTop: 2 }}>No Teams Assigned</Text>
           )}
         </View>
+        {/* Contact Action Icons */}
+        <ContactIcons contacts={(item as any).contacts || []} theme={theme} />
       </View>
     </TouchableOpacity>
   );
@@ -272,6 +392,9 @@ export default function RosterScreen() {
             <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
               <Text style={styles.buttonTextWhite}>Delete All</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={handleImportClick}>
+              <Text style={styles.addButtonText}>+ Import</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => { resetForm(); setModalVisible(true); }}>
               <Text style={styles.addButtonText}>+ Member</Text>
             </TouchableOpacity>
@@ -280,12 +403,46 @@ export default function RosterScreen() {
       />
 
       {loading ? <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} /> : (
-        <FlatList
-          data={members}
-          keyExtractor={m => m.member_id.toString()}
-          renderItem={renderMemberCard}
-          contentContainerStyle={styles.list}
-        />
+        <>
+          {/* Filter and Count */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <TextInput
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 8 }]}
+              placeholder="Search members..."
+              placeholderTextColor={theme.colors.muted}
+              value={rosterFilterText}
+              onChangeText={setRosterFilterText}
+            />
+            <Text style={{ color: theme.colors.muted, fontSize: 12, marginBottom: 8 }}>
+              {rosterFilterText
+                ? `Showing ${members.filter(m => {
+                  const search = rosterFilterText.toLowerCase();
+                  const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
+                  const displayN = (m.display_name || '').toLowerCase();
+                  const teamsStr = (m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ').toLowerCase() || '';
+                  const phoneStr = ((m as any).phone || '').toLowerCase();
+                  const emailStr = ((m as any).email || '').toLowerCase();
+                  return fullName.includes(search) || displayN.includes(search) || teamsStr.includes(search) || phoneStr.includes(search) || emailStr.includes(search);
+                }).length} of ${members.length} members`
+                : `${members.length} members`}
+            </Text>
+          </View>
+          <FlatList
+            data={members.filter(m => {
+              if (!rosterFilterText) return true;
+              const search = rosterFilterText.toLowerCase();
+              const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
+              const displayN = (m.display_name || '').toLowerCase();
+              const teamsStr = (m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ').toLowerCase() || '';
+              const phoneStr = ((m as any).phone || '').toLowerCase();
+              const emailStr = ((m as any).email || '').toLowerCase();
+              return fullName.includes(search) || displayN.includes(search) || teamsStr.includes(search) || phoneStr.includes(search) || emailStr.includes(search);
+            })}
+            keyExtractor={m => m.member_id.toString()}
+            renderItem={renderMemberCard}
+            contentContainerStyle={styles.list}
+          />
+        </>
       )}
 
       <Modal visible={modalVisible} transparent animationType="slide">
@@ -314,10 +471,40 @@ export default function RosterScreen() {
                   </View>
                   <View style={styles.inputGroup}>
                     <Text style={[styles.label, { color: theme.colors.text }]}>Gender</Text>
-                    <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]} value={gender} onChangeText={setGender} placeholder="M/F/Other" placeholderTextColor={theme.colors.muted} />
+                    <View style={styles.chipContainer}>
+                      {[{ value: 'M', label: 'Male' }, { value: 'F', label: 'Female' }, { value: 'U', label: 'Unknown' }].map(opt => {
+                        const isSelected = gender === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => setGender(opt.value)}
+                          >
+                            <Text style={{ color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Dominant Side</Text>
+                    <View style={styles.chipContainer}>
+                      {[{ value: 'R', label: 'Right' }, { value: 'L', label: 'Left' }, { value: 'A', label: 'Ambidextrous' }].map(opt => {
+                        const isSelected = dominantSide === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => setDominantSide(opt.value)}
+                          >
+                            <Text style={{ color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   </View>
                 </>
-              ) : (
+              ) : activeTab === 'Teams' ? (
                 <View>
                   <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Assigned Teams</Text>
 
@@ -388,12 +575,119 @@ export default function RosterScreen() {
                           })}
                           {relevantPositions.length === 0 && <Text style={{ fontSize: 10, color: theme.colors.muted }}>No positions for this sport.</Text>}
                         </View>
+
+                        <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Skill Level:</Text>
+                        <View style={styles.chipContainer}>
+                          {(() => {
+                            // Filter skills for this team's sport
+                            const relevantSkills = allSkills.filter(s => s.sport_id === team.sport_id);
+                            return relevantSkills.map(s => {
+                              const active = mt.skillId === s.skill_id;
+                              return (
+                                <TouchableOpacity
+                                  key={s.skill_id}
+                                  style={[styles.chipSmall, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                  onPress={() => {
+                                    setMemberTeams(prev => prev.map(t =>
+                                      t.teamId === mt.teamId ? { ...t, skillId: s.skill_id } : t
+                                    ));
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 10, color: active ? 'black' : theme.colors.text, fontWeight: active ? 'bold' : 'normal' }}>{s.name}</Text>
+                                </TouchableOpacity>
+                              );
+                            });
+                          })()}
+                          {allSkills.filter(s => s.sport_id === team.sport_id).length === 0 && <Text style={{ fontSize: 10, color: theme.colors.muted }}>No skills for this sport.</Text>}
+                        </View>
                       </View>
                     );
                   })}
                   {memberTeams.length === 0 && <Text style={{ color: theme.colors.muted, marginTop: 20 }}>Select a team above to configure roles.</Text>}
                 </View>
-              )}
+              ) : activeTab === 'Contact' ? (
+                <View>
+                  <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Contact Information</Text>
+
+                  {/* Existing contacts */}
+                  {memberContacts.map((contact, index) => (
+                    <View key={index} style={[styles.teamDetailCard, { borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: theme.colors.text, fontWeight: 'bold' }}>{contact.type}</Text>
+                        <Text style={{ color: theme.colors.text }}>{contact.value}</Text>
+                        <Text style={{ color: theme.colors.muted, fontSize: 12 }}>{contact.label || 'No label'}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setMemberContacts(memberContacts.filter((_, i) => i !== index))}
+                        style={{ padding: 8 }}
+                      >
+                        <Text style={{ color: '#d9534f', fontWeight: 'bold' }}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  {memberContacts.length === 0 && (
+                    <Text style={{ color: theme.colors.muted, marginBottom: 16 }}>No contacts added yet.</Text>
+                  )}
+
+                  {/* Add new contact */}
+                  <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 16 }]}>Add New Contact</Text>
+
+                  <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Type:</Text>
+                  <View style={styles.chipContainer}>
+                    {['phone', 'email', 'whatsapp', 'signal', 'other'].map(type => {
+                      const isSelected = newContactType === type;
+                      return (
+                        <TouchableOpacity
+                          key={type}
+                          style={[styles.chipSmall, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                          onPress={() => setNewContactType(type)}
+                        >
+                          <Text style={{ fontSize: 10, color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Value:</Text>
+                  <TextInput
+                    style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                    value={newContactValue}
+                    onChangeText={setNewContactValue}
+                    placeholder={newContactType === 'email' ? 'email@example.com' : newContactType === 'phone' ? '(555) 555-5555' : 'Contact info'}
+                    placeholderTextColor={theme.colors.muted}
+                    keyboardType={newContactType === 'email' ? 'email-address' : newContactType === 'phone' ? 'phone-pad' : 'default'}
+                  />
+
+                  <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Label:</Text>
+                  <View style={styles.chipContainer}>
+                    {['preferred', 'do not use', 'expired', 'other'].map(label => {
+                      const isSelected = newContactLabel === label;
+                      return (
+                        <TouchableOpacity
+                          key={label}
+                          style={[styles.chipSmall, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                          onPress={() => setNewContactLabel(label)}
+                        >
+                          <Text style={{ fontSize: 10, color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.saveButton, { backgroundColor: theme.colors.primary, marginTop: 12, alignSelf: 'flex-start' }]}
+                    onPress={() => {
+                      if (newContactValue.trim()) {
+                        setMemberContacts([...memberContacts, { type: newContactType, value: newContactValue.trim(), label: newContactLabel }]);
+                        setNewContactValue('');
+                      }
+                    }}
+                  >
+                    <Text style={styles.buttonTextBold}>+ Add Contact</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </ScrollView>
 
             <View style={styles.modalButtons}>
@@ -412,6 +706,24 @@ export default function RosterScreen() {
         </View>
       </Modal>
 
+      <Modal visible={importModalVisible} animationType="slide" transparent={false}>
+        <ImportScreen
+          onBack={() => {
+            setImportModalVisible(false);
+            loadData();
+          }}
+          onImportComplete={() => {
+            setImportModalVisible(false);
+            loadData();
+          }}
+          teams={allTeams}
+          roles={allRoles}
+          positions={allPositions}
+          sports={allSports}
+          skills={allSkills}
+        />
+      </Modal>
+
       <ConfirmationModal
         visible={confirmVisible}
         title={confirmConfig.title}
@@ -427,7 +739,7 @@ export default function RosterScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   list: { padding: 16 },
-  card: { padding: 16, borderRadius: 8, borderWidth: 1, marginBottom: 12 },
+  card: { padding: 20, borderRadius: 8, borderWidth: 1, marginBottom: 16 },
   cardContent: { flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   avatarText: { fontSize: 20, fontWeight: 'bold' },
@@ -466,5 +778,18 @@ const styles = StyleSheet.create({
   cancelButton: { padding: 12, borderRadius: 8, borderWidth: 1, minWidth: 80, alignItems: 'center' },
   saveButton: { padding: 12, borderRadius: 8, minWidth: 100, alignItems: 'center' },
   deleteButton: { padding: 12, borderRadius: 8, minWidth: 80, alignItems: 'center' },
-  buttonTextBold: { color: 'black', fontWeight: 'bold' }
+  buttonTextBold: { color: 'black', fontWeight: 'bold' },
+
+  // Contact Icons
+  contactIconsRow: { flexDirection: 'column', gap: 6, marginLeft: 8 },
+  contactIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)'
+  },
+  contactIcon: { fontSize: 18 }
 });

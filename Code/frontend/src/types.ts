@@ -52,6 +52,13 @@ export interface Venue {
   details?: any;
 }
 
+export interface System {
+  system_id: number;
+  guid: string;
+  name: string; // 'Round Robin', 'Playoff', 'Swiss', 'Elimination', etc.
+  description?: string;
+}
+
 export interface TennisEvent {
   event_id: number;
   guid: string;
@@ -60,10 +67,23 @@ export interface TennisEvent {
   end_date?: number;
   description?: string;
   status?: string;
-  courts?: number;
-  event_type?: string;
-  venue_ids?: number[]; // IDs for fetching
-  venue_names?: string[]; // Display helper
+
+  // Series fields
+  is_series_event?: boolean;
+  series_id?: string;
+  repeat_period?: 'hours' | 'days' | 'weeks';
+  repeat_interval?: number;
+  total_events?: number;
+
+  // Enriched from xref joins (populated by GET /api/events)
+  event_type_names?: string;
+  system_names?: string;
+  venue_names?: string;
+  court_names?: string;
+  field_names?: string;
+  team_names?: string;
+  season_name?: string;
+  is_tournament?: boolean;
 }
 
 // --- LEGACY / SHARED TYPES (Keep for compat or reuse) ---

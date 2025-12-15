@@ -20,6 +20,7 @@ import AnalyticsScreen from "./src/components/AnalyticsScreen";
 import RosterScreen from "./src/components/RosterScreen";
 import CalendarScreen from "./src/components/CalendarScreen";
 import TeamsScreen from "./src/components/TeamsScreen";
+import VenuesScreen from "./src/components/VenuesScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -213,6 +214,7 @@ function AppContent() {
           >
             <Tab.Screen name="Teams" component={TeamsScreen} />
             <Tab.Screen name="Calendar" component={CalendarScreen} />
+            <Tab.Screen name="Venues" component={VenuesScreen} />
             <Tab.Screen name="Roster" component={RosterScreen} />
             <Tab.Screen name="Analytics" component={AnalyticsScreen} />
           </Tab.Navigator>

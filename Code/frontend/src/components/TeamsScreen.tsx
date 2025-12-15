@@ -9,7 +9,6 @@ import {
     SafeAreaView,
     Modal,
     TextInput,
-    Image,
     ActivityIndicator,
     Alert
 } from 'react-native';
@@ -18,6 +17,7 @@ import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
 import { Team, Color, Sport } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
+import { RemoteImage } from './RemoteImage';
 
 export default function TeamsScreen() {
     const { theme } = useTheme();
@@ -136,6 +136,15 @@ export default function TeamsScreen() {
         }
     };
 
+    const showAlert = (title: string, message: string) => {
+        // Use window.alert on web since Alert.alert from react-native doesn't work properly
+        if (typeof window !== 'undefined' && window.alert) {
+            window.alert(`${title}\n\n${message}`);
+        } else {
+            Alert.alert(title, message);
+        }
+    };
+
     const promptDeleteTeam = () => {
         if (!editingTeamId) return;
         setConfirmConfig({
@@ -144,12 +153,21 @@ export default function TeamsScreen() {
             isDestructive: true,
             onConfirm: async () => {
                 try {
-                    await databaseService.deleteTeam(editingTeamId);
+                    const result = await databaseService.deleteTeam(editingTeamId);
+                    console.log('Delete team result:', result);
+                    if (result.error) {
+                        showAlert('Cannot Delete Team', result.message || 'This team has members assigned.');
+                        setConfirmVisible(false);
+                        return;
+                    }
                     setConfirmVisible(false);
                     setModalVisible(false); // Close edit modal too
                     loadData();
-                } catch (e) {
-                    Alert.alert('Error', 'Failed to delete team');
+                } catch (e: any) {
+                    console.error('Delete team error:', e);
+                    const errorMessage = e?.message || 'Failed to delete team';
+                    showAlert('Error', errorMessage);
+                    setConfirmVisible(false);
                 }
             }
         });
@@ -163,11 +181,20 @@ export default function TeamsScreen() {
             isDestructive: true,
             onConfirm: async () => {
                 try {
-                    await databaseService.deleteAllTeams();
+                    const result = await databaseService.deleteAllTeams();
+                    console.log('Delete all teams result:', result);
+                    if (result.error) {
+                        showAlert('Cannot Delete Teams', result.message || 'Some teams have members assigned.');
+                        setConfirmVisible(false);
+                        return;
+                    }
                     setConfirmVisible(false);
                     loadData();
-                } catch (e) {
-                    Alert.alert('Error', 'Failed to delete all teams');
+                } catch (e: any) {
+                    console.error('Delete all teams error:', e);
+                    const errorMessage = e?.message || 'Failed to delete all teams';
+                    showAlert('Error', errorMessage);
+                    setConfirmVisible(false);
                 }
             }
         });
@@ -200,6 +227,16 @@ export default function TeamsScreen() {
                         </View>
                     )}
                 </View>
+                {(item.logo_url && item.logo_url.trim() !== '') || (item as any).logo_svg ? (
+                    <RemoteImage
+                        uri={item.logo_url}
+                        svgContent={(item as any).logo_svg}
+                        width={50}
+                        height={50}
+                        circular
+                        style={styles.teamLogo}
+                    />
+                ) : null}
             </View>
         </TouchableOpacity>
     );
@@ -357,9 +394,9 @@ const styles = StyleSheet.create({
     list: { padding: 16 },
 
     card: {
-        padding: 16,
+        padding: 20,
         borderRadius: 8,
-        marginBottom: 12,
+        marginBottom: 16,
         borderWidth: 1,
     },
     cardContent: { flexDirection: 'row', alignItems: 'center' },
@@ -370,6 +407,7 @@ const styles = StyleSheet.create({
     },
     logoText: { fontSize: 20, fontWeight: 'bold' },
     textContainer: { flex: 1 },
+    teamLogo: { marginLeft: 12, borderWidth: 1, borderColor: '#ccc', borderRadius: 25 },
     teamName: { fontSize: 18, fontWeight: 'bold' },
     teamDetail: { fontSize: 14, marginTop: 2 },
     colorRow: { marginTop: 4 },

@@ -21,9 +21,136 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.error('Error opening database:', err);
   } else {
     console.log('Connected to SQLite database: team_sports.db');
-    initializeDatabase();
+    // Enable foreign key constraints at connection level (critical for referential integrity)
+    db.run("PRAGMA foreign_keys = ON", (fkErr) => {
+      if (fkErr) {
+        console.error('Failed to enable foreign keys:', fkErr);
+      } else {
+        console.log('Foreign key constraints enabled');
+      }
+      initializeDatabase();
+    });
   }
 });
+
+// Helper function to fetch SVG content from a URL
+// Node.js doesn't have CORS restrictions, so this works for any URL
+const fetchSvgContent = async (url) => {
+  if (!url || !url.trim()) return null;
+
+  // Only fetch SVG files
+  if (!url.toLowerCase().includes('.svg')) return null;
+
+  try {
+    console.log('Fetching SVG from:', url);
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.error('Failed to fetch SVG:', response.status, response.statusText);
+      return null;
+    }
+
+    const text = await response.text();
+
+    // Validate it's actually SVG content
+    if (text.includes('<svg') || text.includes('<?xml')) {
+      console.log('SVG cached, length:', text.length);
+      return text;
+    }
+
+    console.warn('Response is not valid SVG');
+    return null;
+  } catch (err) {
+    console.error('Error fetching SVG:', err.message);
+    return null;
+  }
+};
+
+// Promise-based database helpers for proper async/await patterns
+const dbRun = (sql, params = []) => {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve({ lastID: this.lastID, changes: this.changes });
+    });
+  });
+};
+
+const dbAll = (sql, params = []) => {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+};
+
+const dbGet = (sql, params = []) => {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+};
+
+// Promise-based xref linking - waits for ALL inserts to complete
+const linkEventXrefsAsync = async (eventId, xrefs, now) => {
+  const { venueIds = [], teamIds = [], eventTypeIds = [], systemIds = [], courtIds = [], fieldIds = [], seasonId, isTournament } = xrefs;
+
+  const insertPromises = [];
+
+  venueIds.forEach(id => {
+    insertPromises.push(dbRun(
+      'INSERT INTO event_venue_xref (event_id, venue_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+      [eventId, id, now, now]
+    ));
+  });
+
+  teamIds.forEach(id => {
+    insertPromises.push(dbRun(
+      'INSERT INTO event_team_xref (event_id, team_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+      [eventId, id, now, now]
+    ));
+  });
+
+  eventTypeIds.forEach(id => {
+    insertPromises.push(dbRun(
+      'INSERT INTO event_eventType_xref (event_id, eventType_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+      [eventId, id, now, now]
+    ));
+  });
+
+  systemIds.forEach(id => {
+    insertPromises.push(dbRun(
+      'INSERT INTO event_system_xref (event_id, system_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+      [eventId, id, now, now]
+    ));
+  });
+
+  courtIds.forEach(id => {
+    insertPromises.push(dbRun(
+      'INSERT INTO event_court_xref (event_id, court_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+      [eventId, id, now, now]
+    ));
+  });
+
+  fieldIds.forEach(id => {
+    insertPromises.push(dbRun(
+      'INSERT INTO event_field_xref (event_id, field_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+      [eventId, id, now, now]
+    ));
+  });
+
+  if (seasonId) {
+    insertPromises.push(dbRun(
+      'INSERT INTO event_season_xref (event_id, season_id, is_tournament, create_date, update_date) VALUES (?, ?, ?, ?, ?)',
+      [eventId, seasonId, isTournament ? 1 : 0, now, now]
+    ));
+  }
+
+  await Promise.all(insertPromises);
+};
 
 function initializeDatabase() {
   console.log('Initializing database schema...');
@@ -34,9 +161,9 @@ function initializeDatabase() {
 
     // Helper to create standard fields string
     const standardFields = `
-      create_user INTEGER,
+      create_user TEXT,
       create_date INTEGER,
-      update_user INTEGER,
+      update_user TEXT,
       update_date INTEGER,
       deleted_flag INTEGER DEFAULT 0
     `;
@@ -69,6 +196,7 @@ function initializeDatabase() {
       name TEXT NOT NULL,
       team_colors TEXT,
       logo_url TEXT,
+      logo_svg TEXT,
       ${standardFields}
     )`);
 
@@ -82,6 +210,8 @@ function initializeDatabase() {
     )`);
 
     // 5. members (People/Players)
+    // Note: skill is now stored in team_member_xref.skill_id (sport-specific)
+    // Note: phone/email are now stored in contacts table via member_contact_xref
     db.run(`CREATE TABLE IF NOT EXISTS members (
       member_id INTEGER PRIMARY KEY AUTOINCREMENT,
       guid TEXT UNIQUE,
@@ -90,6 +220,10 @@ function initializeDatabase() {
       display_name TEXT,
       gender TEXT,
       birth_date INTEGER,
+      dominant_side TEXT CHECK(dominant_side IN ('L', 'R', 'A')) DEFAULT 'R',
+      share REAL DEFAULT 0,
+      share_type TEXT DEFAULT 'R',
+      share_percentage INTEGER DEFAULT 0,
       ${standardFields}
     )`);
 
@@ -122,6 +256,15 @@ function initializeDatabase() {
       ${standardFields}
     )`);
 
+    // 7.5 skills - skill levels that can be assigned to members per team
+    db.run(`CREATE TABLE IF NOT EXISTS skills (
+      skill_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guid TEXT UNIQUE,
+      name TEXT NOT NULL, -- e.g. '3.5', '4.0', 'Amateur', 'Pro'
+      sort_order INTEGER DEFAULT 0, -- for ordering skills in UI
+      ${standardFields}
+    )`);
+
     // 7. venues
     db.run(`CREATE TABLE IF NOT EXISTS venues (
       venue_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,7 +293,7 @@ function initializeDatabase() {
       ${standardFields}
     )`);
 
-    // 10. events
+    // 10. events (sport-agnostic with series support)
     db.run(`CREATE TABLE IF NOT EXISTS events (
       event_id INTEGER PRIMARY KEY AUTOINCREMENT,
       guid TEXT UNIQUE,
@@ -158,9 +301,13 @@ function initializeDatabase() {
       start_date INTEGER NOT NULL,
       end_date INTEGER,
       description TEXT,
-      status TEXT,
-      courts INTEGER,
-      event_type TEXT,
+      status TEXT DEFAULT 'scheduled',
+      -- Series support
+      is_series_event INTEGER DEFAULT 0,
+      series_id TEXT,
+      repeat_period TEXT CHECK (repeat_period IN ('hours', 'days', 'weeks')),
+      repeat_interval INTEGER DEFAULT 1,
+      total_events INTEGER,
       ${standardFields}
     )`);
 
@@ -193,11 +340,12 @@ function initializeDatabase() {
       ${standardFields}
     )`);
 
-    // 14. systems
+    // 14. systems (scheduling/tournament systems - sport-agnostic)
     db.run(`CREATE TABLE IF NOT EXISTS systems (
       system_id INTEGER PRIMARY KEY AUTOINCREMENT,
       guid TEXT UNIQUE,
-      name TEXT NOT NULL, -- e.g. 'Round Robin', 'Swiss'
+      name TEXT NOT NULL UNIQUE, -- e.g. 'Round Robin', 'Swiss', 'Elimination'
+      description TEXT,
       config TEXT, -- JSON configuration for the system
       ${standardFields}
     )`);
@@ -213,6 +361,16 @@ function initializeDatabase() {
       ${standardFields},
       FOREIGN KEY(sport_id) REFERENCES sports(sport_id),
       FOREIGN KEY(league_id) REFERENCES leagues(league_id)
+    )`);
+
+    // 1.5 skill_sport_xref - links skills to sports
+    db.run(`CREATE TABLE IF NOT EXISTS skill_sport_xref (
+      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      skill_id INTEGER NOT NULL,
+      sport_id INTEGER NOT NULL,
+      ${standardFields},
+      FOREIGN KEY(skill_id) REFERENCES skills(skill_id),
+      FOREIGN KEY(sport_id) REFERENCES sports(sport_id)
     )`);
 
     // 2. team_league_xref
@@ -250,13 +408,11 @@ function initializeDatabase() {
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       team_id INTEGER NOT NULL,
       member_id INTEGER NOT NULL,
-      -- Role could be here OR in member_role_xref. 
-      -- If a member has a role SPECIFIC to a team, it goes here or we use member_role_xref linked to this context.
-      -- For simplicity as per request 'member_role_xref' exists separately, but typically Team Membership implies a role.
-      -- We will keep this for pure membership and allow roles to be associated structurally.
+      skill_id INTEGER, -- skill level for this member on this team (sport-specific)
       ${standardFields},
       FOREIGN KEY(team_id) REFERENCES teams(team_id),
-      FOREIGN KEY(member_id) REFERENCES members(member_id)
+      FOREIGN KEY(member_id) REFERENCES members(member_id),
+      FOREIGN KEY(skill_id) REFERENCES skills(skill_id)
     )`);
 
     // 5. member_role_xref
@@ -284,6 +440,16 @@ function initializeDatabase() {
       ${standardFields},
       FOREIGN KEY(member_id) REFERENCES members(member_id),
       FOREIGN KEY(position_id) REFERENCES positions(position_id)
+    )`);
+
+    // 5.6 member_contact_xref
+    db.run(`CREATE TABLE IF NOT EXISTS member_contact_xref (
+      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      member_id INTEGER NOT NULL,
+      contact_id INTEGER NOT NULL,
+      ${standardFields},
+      FOREIGN KEY(member_id) REFERENCES members(member_id),
+      FOREIGN KEY(contact_id) REFERENCES contacts(contact_id)
     )`);
 
     // 6. event_venue_xref
@@ -382,6 +548,47 @@ function initializeDatabase() {
       FOREIGN KEY(season_id) REFERENCES seasons(season_id)
     )`);
 
+    // 15. event_system_xref - links events to scheduling systems
+    db.run(`CREATE TABLE IF NOT EXISTS event_system_xref (
+      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL,
+      system_id INTEGER NOT NULL,
+      ${standardFields},
+      FOREIGN KEY(event_id) REFERENCES events(event_id),
+      FOREIGN KEY(system_id) REFERENCES systems(system_id)
+    )`);
+
+    // 16. event_court_xref - links events to courts (tennis, pickleball, etc)
+    db.run(`CREATE TABLE IF NOT EXISTS event_court_xref (
+      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL,
+      court_id INTEGER NOT NULL,
+      ${standardFields},
+      FOREIGN KEY(event_id) REFERENCES events(event_id),
+      FOREIGN KEY(court_id) REFERENCES courts(court_id)
+    )`);
+
+    // 17. event_field_xref - links events to fields (soccer, football, etc)
+    db.run(`CREATE TABLE IF NOT EXISTS event_field_xref (
+      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL,
+      field_id INTEGER NOT NULL,
+      ${standardFields},
+      FOREIGN KEY(event_id) REFERENCES events(event_id),
+      FOREIGN KEY(field_id) REFERENCES fields(field_id)
+    )`);
+
+    // 18. event_season_xref - links events to seasons/tournaments
+    db.run(`CREATE TABLE IF NOT EXISTS event_season_xref (
+      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL,
+      season_id INTEGER NOT NULL,
+      is_tournament INTEGER DEFAULT 0, -- 0 = regular season, 1 = tournament
+      ${standardFields},
+      FOREIGN KEY(event_id) REFERENCES events(event_id),
+      FOREIGN KEY(season_id) REFERENCES seasons(season_id)
+    )`);
+
     console.log('Database tables initialized.');
     seedReferenceData();
   });
@@ -399,7 +606,7 @@ function seedReferenceData() {
       // Sports
       const sports = ['Tennis', 'Basketball', 'Soccer', 'Volleyball', 'Pickleball'];
       const users = ['System'];
-      const roles = ['Player', 'Captain', 'Coach', 'Admin', 'Spectator'];
+      const roles = ['Player', 'Captain', 'Coach', 'Admin', 'Reserve'];
       const eventTypes = ['Match', 'Practice', 'Meeting', 'Tournament'];
 
       // Seed Sports
@@ -417,6 +624,12 @@ function seedReferenceData() {
       eventTypes.forEach(e => stmtET.run(uuidv4(), e, now, now));
       stmtET.finalize();
 
+      // Seed Systems (scheduling/tournament systems)
+      const systems = ['Round Robin', 'Playoff', 'Swiss', 'Elimination', 'League Play', 'Practice'];
+      const stmtSys = db.prepare('INSERT INTO systems (guid, name, create_date, update_date) VALUES (?, ?, ?, ?)');
+      systems.forEach(s => stmtSys.run(uuidv4(), s, now, now));
+      stmtSys.finalize();
+
       // Seed Colors
       const colors = [
         { name: 'Red', hex: '#FF0000' },
@@ -432,18 +645,24 @@ function seedReferenceData() {
       ];
       const stmtColor = db.prepare('INSERT INTO colors (guid, name, hex_code, create_date, update_date) VALUES (?, ?, ?, ?, ?)');
       colors.forEach(c => stmtColor.run(uuidv4(), c.name, c.hex, now, now));
-      stmtColor.finalize();
-
-      console.log('Seeding completed.');
+      stmtColor.finalize(() => {
+        console.log('Seeding completed. Now seeding positions...');
+        seedPositions();
+      });
+    } else {
+      // Sports already exist, still check/seed positions
+      seedPositions();
     }
   });
-  seedPositions();
 }
 
 function seedPositions() {
   const sportsData = [
     { name: 'Tennis', positions: ['Singles', 'Doubles'] },
-    { name: 'Soccer', positions: ['Goalie', 'Defender', 'Midfield', 'Forward'] }
+    { name: 'Pickleball', positions: ['Singles', 'Doubles'] },
+    { name: 'Soccer', positions: ['Goalie', 'Defender', 'Midfield', 'Forward'] },
+    { name: 'Basketball', positions: ['Point Guard', 'Shooting Guard', 'Small Forward', 'Power Forward', 'Center'] },
+    { name: 'Volleyball', positions: ['Setter', 'Libero', 'Middle Blocker', 'Outside Hitter', 'Opposite Hitter'] }
   ];
 
   const now = Date.now();
@@ -470,9 +689,84 @@ function seedPositions() {
       });
     });
   });
+
+  // Call seedSkills after a delay to ensure positions are inserted
+  setTimeout(seedSkills, 500);
 }
 
+// Seed skills by sport
+function seedSkills() {
+  const now = Date.now();
 
+  // Define skills for different sports - 0.25 increments from 3.0 to 5.5
+  const tennisPickleballSkills = ['3.0', '3.25', '3.5', '3.75', '4.0', '4.25', '4.5', '4.75', '5.0', '5.25', '5.5'];
+  const generalSkills = ['Amateur', 'Skilled Amateur', 'Fit Amateur', 'Semi-Pro', 'Pro'];
+
+  // Tennis and Pickleball use numeric ratings
+  const tennisPickleballSports = ['Tennis', 'Pickleball'];
+  // All other sports use general ratings
+  const generalSports = ['Basketball', 'Soccer', 'Volleyball'];
+
+  console.log('Seeding skills...');
+
+  db.get('SELECT count(*) as count FROM skills', (err, row) => {
+    if (err) return console.error('Error checking skills:', err);
+
+    if (row.count === 0) {
+      // Seed Tennis/Pickleball skills
+      tennisPickleballSkills.forEach((skillName, idx) => {
+        db.run(
+          'INSERT INTO skills (guid, name, sort_order, create_date, update_date) VALUES (?, ?, ?, ?, ?)',
+          [uuidv4(), skillName, idx + 1, now, now],
+          function (err) {
+            if (err) return console.error('Failed to insert skill:', err);
+            const skillId = this.lastID;
+
+            // Link to Tennis and Pickleball
+            tennisPickleballSports.forEach(sportName => {
+              db.get('SELECT sport_id FROM sports WHERE name = ?', [sportName], (e, sport) => {
+                if (sport) {
+                  db.run(
+                    'INSERT INTO skill_sport_xref (skill_id, sport_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+                    [skillId, sport.sport_id, now, now]
+                  );
+                }
+              });
+            });
+          }
+        );
+      });
+
+      // Seed general skills
+      generalSkills.forEach((skillName, idx) => {
+        db.run(
+          'INSERT INTO skills (guid, name, sort_order, create_date, update_date) VALUES (?, ?, ?, ?, ?)',
+          [uuidv4(), skillName, idx + 1, now, now],
+          function (err) {
+            if (err) return console.error('Failed to insert skill:', err);
+            const skillId = this.lastID;
+
+            // Link to general sports
+            generalSports.forEach(sportName => {
+              db.get('SELECT sport_id FROM sports WHERE name = ?', [sportName], (e, sport) => {
+                if (sport) {
+                  db.run(
+                    'INSERT INTO skill_sport_xref (skill_id, sport_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+                    [skillId, sport.sport_id, now, now]
+                  );
+                }
+              });
+            });
+          }
+        );
+      });
+
+      console.log('Skills seeding completed.');
+    } else {
+      console.log('Skills already seeded.');
+    }
+  });
+}
 // Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', database: 'team_sports.db', timestamp: new Date().toISOString() });
@@ -516,7 +810,24 @@ app.get('/api/lookups', (req, res) => {
             if (err) return sendError(res, err, 'Failed to fetch positions');
             lookups.positions = rows;
 
-            res.json(lookups);
+            // Fetch skills with their sport associations
+            db.all(`
+              SELECT s.*, ssx.sport_id
+              FROM skills s
+              LEFT JOIN skill_sport_xref ssx ON s.skill_id = ssx.skill_id
+              ORDER BY s.sort_order, s.name
+            `, (err, rows) => {
+              if (err) return sendError(res, err, 'Failed to fetch skills');
+              lookups.skills = rows;
+
+              // Fetch systems (scheduling/tournament systems)
+              db.all('SELECT * FROM systems ORDER BY name', (err, rows) => {
+                if (err) return sendError(res, err, 'Failed to fetch systems');
+                lookups.systems = rows;
+
+                res.json(lookups);
+              });
+            });
           });
         });
       });
@@ -542,12 +853,14 @@ app.get('/api/members', async (req, res) => {
           SELECT 
             t.team_id, t.name as team_name, 
             s.name as sport_name,
+            tmx.skill_id, sk.name as skill_name,
             GROUP_CONCAT(DISTINCT r.name) as role_names,
             GROUP_CONCAT(DISTINCT p.name) as position_names
           FROM team_member_xref tmx
           JOIN teams t ON tmx.team_id = t.team_id
           LEFT JOIN team_sport_xref tsx ON t.team_id = tsx.team_id
           LEFT JOIN sports s ON tsx.sport_id = s.sport_id
+          LEFT JOIN skills sk ON tmx.skill_id = sk.skill_id
           LEFT JOIN member_role_xref mrx ON mrx.member_id = tmx.member_id AND mrx.context_table = 'teams' AND mrx.context_id = t.team_id
           LEFT JOIN roles r ON mrx.role_id = r.role_id
           LEFT JOIN member_position_xref mpx ON mpx.member_id = tmx.member_id AND mpx.context_table = 'teams' AND mpx.context_id = t.team_id
@@ -561,9 +874,23 @@ app.get('/api/members', async (req, res) => {
         });
       });
 
+      // Get contacts for this member
+      const contacts = await new Promise((resolve, reject) => {
+        db.all(`
+          SELECT c.contact_id, c.value, c.type, c.label
+          FROM member_contact_xref mcx
+          JOIN contacts c ON mcx.contact_id = c.contact_id
+          WHERE mcx.member_id = ? AND (c.deleted_flag IS NULL OR c.deleted_flag = 0)
+        `, [member.member_id], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+
       return {
         ...member,
-        teams: teamAssignments
+        teams: teamAssignments,
+        contacts: contacts
       };
     }));
 
@@ -585,12 +912,14 @@ const saveMemberRelations = (db, memberId, teams, callback) => {
 
         if (!teams || teams.length === 0) return callback();
 
-        const stmtTeam = db.prepare(`INSERT INTO team_member_xref (team_id, member_id, create_date, update_date) VALUES (?, ?, ?, ?)`);
+        console.log('saveMemberRelations - teams:', JSON.stringify(teams));
+
+        const stmtTeam = db.prepare(`INSERT INTO team_member_xref (team_id, member_id, skill_id, create_date, update_date) VALUES (?, ?, ?, ?, ?)`);
         const stmtRole = db.prepare(`INSERT INTO member_role_xref (member_id, role_id, context_table, context_id, create_date, update_date) VALUES (?, ?, 'teams', ?, ?, ?)`);
         const stmtPos = db.prepare(`INSERT INTO member_position_xref (member_id, position_id, context_table, context_id, create_date, update_date) VALUES (?, ?, 'teams', ?, ?, ?)`);
 
         teams.forEach(t => {
-          stmtTeam.run(t.teamId, memberId, now, now);
+          stmtTeam.run(t.teamId, memberId, t.skillId || null, now, now);
           if (t.roleIds) t.roleIds.forEach(rid => stmtRole.run(memberId, rid, t.teamId, now, now));
           if (t.positionIds) t.positionIds.forEach(pid => stmtPos.run(memberId, pid, t.teamId, now, now));
         });
@@ -603,8 +932,45 @@ const saveMemberRelations = (db, memberId, teams, callback) => {
   });
 };
 
+// Helper to save member contacts
+const saveMemberContacts = (db, memberId, contacts, callback) => {
+  const now = Date.now();
+
+  // First, soft-delete existing contact links for this member
+  db.run(`DELETE FROM member_contact_xref WHERE member_id = ?`, [memberId], () => {
+    if (!contacts || contacts.length === 0) return callback();
+
+    let pending = contacts.length;
+
+    contacts.forEach(contact => {
+      const guid = uuidv4();
+      // Insert new contact
+      db.run(
+        `INSERT INTO contacts (guid, value, type, label, create_date, update_date) VALUES (?, ?, ?, ?, ?, ?)`,
+        [guid, contact.value, contact.type, contact.label || 'preferred', now, now],
+        function (err) {
+          if (err) {
+            console.error('Failed to insert contact:', err);
+            if (--pending === 0) callback();
+            return;
+          }
+          const contactId = this.lastID;
+          // Link to member
+          db.run(
+            `INSERT INTO member_contact_xref (member_id, contact_id, create_date, update_date) VALUES (?, ?, ?, ?)`,
+            [memberId, contactId, now, now],
+            () => {
+              if (--pending === 0) callback();
+            }
+          );
+        }
+      );
+    });
+  });
+};
+
 app.post('/api/members', (req, res) => {
-  const { firstName, lastName, displayName, gender, email, phone, teams } = req.body;
+  const { firstName, lastName, displayName, gender, teams, contacts, dominant_side, share, share_type, share_percentage } = req.body;
   if (!firstName || !lastName) return sendError(res, new Error('Validation'), 'Name required', 400);
 
   const now = Date.now();
@@ -612,13 +978,16 @@ app.post('/api/members', (req, res) => {
 
   db.serialize(() => {
     db.run(
-      `INSERT INTO members (guid, first_name, last_name, display_name, gender, create_date, update_date) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [guid, firstName, lastName, displayName, gender, now, now],
+      `INSERT INTO members (guid, first_name, last_name, display_name, gender, dominant_side, share, share_type, share_percentage, create_date, update_date) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [guid, firstName, lastName, displayName, gender, dominant_side || 'R', share || 0, share_type || 'R', share_percentage || 0, now, now],
       function (err) {
         if (err) return sendError(res, err, 'Failed to create member');
         const memberId = this.lastID;
         saveMemberRelations(db, memberId, teams, () => {
-          res.status(201).json({ member_id: memberId, success: true });
+          saveMemberContacts(db, memberId, contacts, () => {
+            res.status(201).json({ member_id: memberId, success: true });
+          });
         });
       }
     );
@@ -627,16 +996,18 @@ app.post('/api/members', (req, res) => {
 
 app.put('/api/members/:memberId', (req, res) => {
   const { memberId } = req.params;
-  const { firstName, lastName, displayName, gender, teams } = req.body;
+  const { firstName, lastName, displayName, gender, teams, contacts, dominant_side, share, share_type, share_percentage } = req.body;
   const now = Date.now();
 
   db.run(
-    `UPDATE members SET first_name=?, last_name=?, display_name=?, gender=?, update_date=? WHERE member_id=?`,
-    [firstName, lastName, displayName, gender, now, memberId],
+    `UPDATE members SET first_name=?, last_name=?, display_name=?, gender=?, dominant_side=?, share=?, share_type=?, share_percentage=?, update_date=? WHERE member_id=?`,
+    [firstName, lastName, displayName, gender, dominant_side || 'R', share || 0, share_type || 'R', share_percentage || 0, now, memberId],
     function (err) {
       if (err) return sendError(res, err, 'Failed to update member');
       saveMemberRelations(db, memberId, teams, () => {
-        res.json({ success: true, member_id: memberId });
+        saveMemberContacts(db, memberId, contacts, () => {
+          res.json({ success: true, member_id: memberId });
+        });
       });
     }
   );
@@ -662,6 +1033,7 @@ app.delete('/api/members', (req, res) => {
     db.run(`DELETE FROM team_member_xref`);
     db.run(`DELETE FROM member_role_xref`);
     db.run(`DELETE FROM member_position_xref`);
+    db.run(`DELETE FROM member_contact_xref`);
     db.run(`DELETE FROM members`, (err) => {
       if (err) return sendError(res, err, 'Failed to delete all members');
       res.json({ success: true });
@@ -678,7 +1050,7 @@ app.get('/api/members/:memberId', (req, res) => {
 
     // 2. Get Team Assignments
     const sqlTeams = `
-            SELECT t.team_id, t.name as team_name, s.name as sport_name, s.sport_id
+            SELECT t.team_id, t.name as team_name, s.name as sport_name, s.sport_id, tmx.skill_id
             FROM team_member_xref tmx
             JOIN teams t ON tmx.team_id = t.team_id
             LEFT JOIN team_sport_xref tsx ON t.team_id = tsx.team_id
@@ -714,7 +1086,22 @@ app.get('/api/members/:memberId', (req, res) => {
 
       Promise.all(promises).then(enrichedTeams => {
         member.teams = enrichedTeams;
-        res.json(member);
+
+        // 4. Get Contacts
+        const sqlContacts = `
+          SELECT c.contact_id, c.guid, c.value, c.type, c.label
+          FROM member_contact_xref mcx
+          JOIN contacts c ON mcx.contact_id = c.contact_id
+          WHERE mcx.member_id = ?
+        `;
+        db.all(sqlContacts, [memberId], (err, contacts) => {
+          if (err) {
+            member.contacts = [];
+          } else {
+            member.contacts = contacts || [];
+          }
+          res.json(member);
+        });
       });
     });
   });
@@ -736,18 +1123,21 @@ app.get('/api/teams', (req, res) => {
   });
 });
 
-app.post('/api/teams', (req, res) => {
+app.post('/api/teams', async (req, res) => {
   const { name, sportId, teamColors, colorIds, logoUrl } = req.body;
   if (!name || !sportId) return sendError(res, new Error('Validation'), 'Name and SportID required', 400);
 
   const now = Date.now();
   const guid = uuidv4();
 
+  // Fetch SVG content if logo URL is provided
+  const logoSvg = await fetchSvgContent(logoUrl);
+
   db.serialize(() => {
     // 1. Create Team
     db.run(
-      `INSERT INTO teams (guid, name, team_colors, logo_url, create_date, update_date) VALUES (?, ?, ?, ?, ?, ?)`,
-      [guid, name, teamColors, logoUrl, now, now],
+      `INSERT INTO teams (guid, name, team_colors, logo_url, logo_svg, create_date, update_date) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [guid, name, teamColors, logoUrl, logoSvg, now, now],
       function (err) {
         if (err) return sendError(res, err, 'Failed to create team');
         const teamId = this.lastID;
@@ -774,17 +1164,20 @@ app.post('/api/teams', (req, res) => {
   });
 });
 
-app.put('/api/teams/:teamId', (req, res) => {
+app.put('/api/teams/:teamId', async (req, res) => {
   const { teamId } = req.params;
   const { name, sportId, teamColors, colorIds, logoUrl } = req.body;
   if (!name || !sportId) return sendError(res, new Error('Validation'), 'Name and SportID required', 400);
 
   const now = Date.now();
 
+  // Fetch SVG content if logo URL is provided
+  const logoSvg = await fetchSvgContent(logoUrl);
+
   // 1. Update Team
   db.run(
-    `UPDATE teams SET name = ?, team_colors = ?, logo_url = ?, update_date = ? WHERE team_id = ?`,
-    [name, teamColors, logoUrl, now, teamId],
+    `UPDATE teams SET name = ?, team_colors = ?, logo_url = ?, logo_svg = ?, update_date = ? WHERE team_id = ?`,
+    [name, teamColors, logoUrl, logoSvg, now, teamId],
     function (err) {
       if (err) return sendError(res, err, 'Failed to update team');
 
@@ -827,28 +1220,62 @@ app.put('/api/teams/:teamId', (req, res) => {
 app.put('/api/teams/:teamId/delete', (req, res) => {
   const { teamId } = req.params;
   const now = Date.now();
-  db.run(
-    `UPDATE teams SET deleted_flag = 1, update_date = ? WHERE team_id = ?`,
-    [now, teamId],
-    function (err) {
-      if (err) return sendError(res, err, 'Failed to delete team');
-      res.json({ success: true, team_id: teamId });
+
+  // First check if any members are assigned to this team
+  db.get(
+    `SELECT COUNT(*) as memberCount FROM team_member_xref WHERE team_id = ?`,
+    [teamId],
+    (err, row) => {
+      if (err) return sendError(res, err, 'Failed to check team members');
+
+      if (row.memberCount > 0) {
+        return res.status(400).json({
+          error: 'Cannot delete team',
+          message: `This team has ${row.memberCount} member(s) assigned. Please remove all members from the team before deleting.`,
+          memberCount: row.memberCount
+        });
+      }
+
+      // No members assigned, proceed with deletion
+      db.run(
+        `UPDATE teams SET deleted_flag = 1, update_date = ? WHERE team_id = ?`,
+        [now, teamId],
+        function (err) {
+          if (err) return sendError(res, err, 'Failed to delete team');
+          res.json({ success: true, team_id: teamId });
+        }
+      );
     }
   );
 });
 
 // Hard Delete All Teams
 app.delete('/api/teams', (req, res) => {
-  // Manual cleanup for safety.
-  db.serialize(() => {
-    db.run(`DELETE FROM team_sport_xref`);
-    db.run(`DELETE FROM team_color_xref`);
-    db.run(`DELETE FROM team_member_xref`);
-    db.run(`DELETE FROM teams`, (err) => {
-      if (err) return sendError(res, err, 'Failed to delete all teams');
-      res.json({ success: true });
-    });
-  });
+  // First check if any teams have members assigned
+  db.get(
+    `SELECT COUNT(*) as memberCount FROM team_member_xref`,
+    (err, row) => {
+      if (err) return sendError(res, err, 'Failed to check team members');
+
+      if (row.memberCount > 0) {
+        return res.status(400).json({
+          error: 'Cannot delete all teams',
+          message: `There are ${row.memberCount} member-team assignment(s). Please remove all members from all teams before deleting.`,
+          memberCount: row.memberCount
+        });
+      }
+
+      // No members assigned to any team, proceed with deletion
+      db.serialize(() => {
+        db.run(`DELETE FROM team_sport_xref`);
+        db.run(`DELETE FROM team_color_xref`);
+        db.run(`DELETE FROM teams`, (err) => {
+          if (err) return sendError(res, err, 'Failed to delete all teams');
+          res.json({ success: true });
+        });
+      });
+    }
+  );
 });
 
 // 4. TEAM ROSTER
@@ -952,49 +1379,395 @@ app.post('/api/venues', (req, res) => {
 
 // 6. EVENTS
 app.get('/api/events', (req, res) => {
-  // Return basic event info joined with linked Venues and Teams if reasonable, 
-  // or just return events and let client fetch details. 
-  // For now, basic list:
-  db.all('SELECT * FROM events ORDER BY start_date', (err, rows) => {
+  // Enhanced query with xref joins for enriched data - includes both names AND ids
+  const sql = `
+    SELECT e.*,
+      GROUP_CONCAT(DISTINCT et.name) as event_type_names,
+      GROUP_CONCAT(DISTINCT eetx.eventType_id) as event_type_ids,
+      GROUP_CONCAT(DISTINCT s.name) as system_names,
+      GROUP_CONCAT(DISTINCT esyx.system_id) as system_ids,
+      GROUP_CONCAT(DISTINCT v.name) as venue_names,
+      GROUP_CONCAT(DISTINCT evx.venue_id) as venue_ids,
+      GROUP_CONCAT(DISTINCT c.name) as court_names,
+      GROUP_CONCAT(DISTINCT ecx.court_id) as court_ids,
+      GROUP_CONCAT(DISTINCT f.name) as field_names,
+      GROUP_CONCAT(DISTINCT efx.field_id) as field_ids,
+      GROUP_CONCAT(DISTINCT t.name) as team_names,
+      GROUP_CONCAT(DISTINCT etx.team_id) as team_ids,
+      sea.name as season_name,
+      esx.is_tournament
+    FROM events e
+    LEFT JOIN event_eventType_xref eetx ON e.event_id = eetx.event_id
+    LEFT JOIN eventTypes et ON eetx.eventType_id = et.eventType_id
+    LEFT JOIN event_system_xref esyx ON e.event_id = esyx.event_id
+    LEFT JOIN systems s ON esyx.system_id = s.system_id
+    LEFT JOIN event_venue_xref evx ON e.event_id = evx.event_id
+    LEFT JOIN venues v ON evx.venue_id = v.venue_id
+    LEFT JOIN event_court_xref ecx ON e.event_id = ecx.event_id
+    LEFT JOIN courts c ON ecx.court_id = c.court_id
+    LEFT JOIN event_field_xref efx ON e.event_id = efx.event_id
+    LEFT JOIN fields f ON efx.field_id = f.field_id
+    LEFT JOIN event_team_xref etx ON e.event_id = etx.event_id
+    LEFT JOIN teams t ON etx.team_id = t.team_id
+    LEFT JOIN event_season_xref esx ON e.event_id = esx.event_id
+    LEFT JOIN seasons sea ON esx.season_id = sea.season_id
+    WHERE e.deleted_flag IS NULL OR e.deleted_flag = 0
+    GROUP BY e.event_id
+    ORDER BY e.start_date
+  `;
+
+  db.all(sql, (err, rows) => {
     if (err) return sendError(res, err, 'Failed to fetch events');
     res.json(rows);
   });
 });
 
-app.post('/api/events', (req, res) => {
-  const { name, startDate, endDate, description, venueIds = [], teamIds = [] } = req.body;
-  if (!name || !startDate) return sendError(res, new Error('Validation'), 'Name and StartDate required', 400);
+// Helper: Calculate next date for series
+function calculateNextDate(baseDate, period, interval, index) {
+  const base = new Date(baseDate);
+  switch (period) {
+    case 'hours':
+      return base.getTime() + (index * interval * 60 * 60 * 1000);
+    case 'days':
+      return base.getTime() + (index * interval * 24 * 60 * 60 * 1000);
+    case 'weeks':
+      return base.getTime() + (index * interval * 7 * 24 * 60 * 60 * 1000);
+    default:
+      return base.getTime();
+  }
+}
 
+// Old linkEventXrefs removed - using linkEventXrefsAsync instead
+
+
+app.post('/api/events', async (req, res) => {
+  try {
+    const {
+      name, startDate, endDate, description,
+      // xref IDs
+      venueIds = [], teamIds = [], eventTypeIds = [], systemIds = [],
+      courtIds = [], fieldIds = [], seasonId, isTournament = false,
+      // Series options
+      isSeriesEvent = false,
+      repeatPeriod,    // 'hours' | 'days' | 'weeks'
+      repeatInterval = 1,
+      totalEvents = 1
+    } = req.body;
+
+    if (!name || !startDate) {
+      return sendError(res, new Error('Validation'), 'Name and StartDate required', 400);
+    }
+
+    const now = Date.now();
+    const xrefs = { venueIds, teamIds, eventTypeIds, systemIds, courtIds, fieldIds, seasonId, isTournament };
+
+    if (isSeriesEvent && repeatPeriod && totalEvents > 1) {
+      // Generate series of events using async/await
+      const seriesId = uuidv4();
+      const createdEvents = [];
+
+      for (let i = 0; i < totalEvents; i++) {
+        const eventStartDate = calculateNextDate(startDate, repeatPeriod, repeatInterval, i);
+        const eventEndDate = endDate ? calculateNextDate(endDate, repeatPeriod, repeatInterval, i) : null;
+        const eventGuid = uuidv4();
+        const eventName = `${name} #${i + 1}`;
+
+        // Insert event and wait for completion
+        const result = await dbRun(
+          `INSERT INTO events (guid, name, start_date, end_date, description, status, is_series_event, series_id, repeat_period, repeat_interval, total_events, create_date, update_date)
+           VALUES (?, ?, ?, ?, ?, 'scheduled', 1, ?, ?, ?, ?, ?, ?)`,
+          [eventGuid, eventName, eventStartDate, eventEndDate, description, seriesId, repeatPeriod, repeatInterval, totalEvents, now, now]
+        );
+
+        const eventId = result.lastID;
+        createdEvents.push({ event_id: eventId, guid: eventGuid, name: eventName, start_date: eventStartDate });
+
+        // Link xrefs and wait for completion
+        await linkEventXrefsAsync(eventId, xrefs, now);
+      }
+
+      // All events created and xrefs linked - now safe to respond
+      res.status(201).json({
+        series_id: seriesId,
+        total_events: totalEvents,
+        events: createdEvents
+      });
+    } else {
+      // Single event creation
+      const guid = uuidv4();
+
+      const result = await dbRun(
+        `INSERT INTO events (guid, name, start_date, end_date, description, status, is_series_event, create_date, update_date)
+         VALUES (?, ?, ?, ?, ?, 'scheduled', 0, ?, ?)`,
+        [guid, name, startDate, endDate, description, now, now]
+      );
+
+      const eventId = result.lastID;
+      await linkEventXrefsAsync(eventId, xrefs, now);
+
+      res.status(201).json({ event_id: eventId, guid, name });
+    }
+  } catch (err) {
+    console.error('Error creating event:', err);
+    sendError(res, err, 'Failed to create event');
+  }
+});
+
+// UPDATE event
+app.put('/api/events/:id', async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const { name, startDate, endDate, description, venueIds = [], eventTypeIds = [], systemIds = [], courtIds = [], fieldIds = [] } = req.body;
+    const now = Date.now();
+
+    // Update event
+    await dbRun(
+      'UPDATE events SET name = ?, start_date = ?, end_date = ?, description = ?, update_date = ? WHERE event_id = ?',
+      [name, startDate, endDate, description, now, eventId]
+    );
+
+    // Clear old xrefs (wait for all to complete)
+    await Promise.all([
+      dbRun('DELETE FROM event_venue_xref WHERE event_id = ?', [eventId]),
+      dbRun('DELETE FROM event_eventType_xref WHERE event_id = ?', [eventId]),
+      dbRun('DELETE FROM event_system_xref WHERE event_id = ?', [eventId]),
+      dbRun('DELETE FROM event_court_xref WHERE event_id = ?', [eventId]),
+      dbRun('DELETE FROM event_field_xref WHERE event_id = ?', [eventId])
+    ]);
+
+    // Re-link xrefs and wait for completion
+    const xrefs = { venueIds, eventTypeIds, systemIds, courtIds, fieldIds };
+    await linkEventXrefsAsync(eventId, xrefs, now);
+
+    res.json({ event_id: eventId, name, updated: true });
+  } catch (err) {
+    console.error('Error updating event:', err);
+    sendError(res, err, 'Failed to update event');
+  }
+});
+
+// DELETE event (with optional series deletion)
+app.delete('/api/events/:id', (req, res) => {
+  const eventId = req.params.id;
+  const { deleteSeries } = req.query;
+  const now = Date.now();
+
+  if (deleteSeries === 'true') {
+    // Get series_id first, then delete all events in series
+    db.get('SELECT series_id FROM events WHERE event_id = ?', [eventId], (err, row) => {
+      if (err) return sendError(res, err, 'Failed to find event');
+      if (!row || !row.series_id) {
+        // No series, just delete single event
+        db.run('UPDATE events SET deleted_flag = 1, update_date = ? WHERE event_id = ?', [now, eventId], function (err) {
+          if (err) return sendError(res, err, 'Failed to delete event');
+          res.json({ deleted: this.changes });
+        });
+      } else {
+        // Delete all events in series
+        db.run('UPDATE events SET deleted_flag = 1, update_date = ? WHERE series_id = ?', [now, row.series_id], function (err) {
+          if (err) return sendError(res, err, 'Failed to delete series');
+          res.json({ deleted: this.changes, series_id: row.series_id });
+        });
+      }
+    });
+  } else {
+    // Delete single event only
+    db.run('UPDATE events SET deleted_flag = 1, update_date = ? WHERE event_id = ?', [now, eventId], function (err) {
+      if (err) return sendError(res, err, 'Failed to delete event');
+      res.json({ deleted: this.changes });
+    });
+  }
+});
+
+// DELETE ALL events (hard delete)
+app.delete('/api/events', (req, res) => {
+  // Must delete xref tables FIRST to avoid foreign key constraint errors
+  db.serialize(() => {
+    db.run('DELETE FROM event_venue_xref');
+    db.run('DELETE FROM event_team_xref');
+    db.run('DELETE FROM event_eventType_xref');
+    db.run('DELETE FROM event_system_xref');
+    db.run('DELETE FROM event_court_xref');
+    db.run('DELETE FROM event_field_xref');
+    db.run('DELETE FROM event_season_xref');
+    db.run('DELETE FROM events', function (err) {
+      if (err) return sendError(res, err, 'Failed to delete all events');
+      res.json({ deleted: this.changes });
+    });
+  });
+});
+
+// 7. VENUES - Enhanced CRUD
+app.put('/api/venues/:id', (req, res) => {
+  const { name, address, details } = req.body;
+  const venueId = req.params.id;
+  const now = Date.now();
+
+  if (!name) return sendError(res, new Error('Validation'), 'Name required', 400);
+
+  db.run(
+    'UPDATE venues SET name = ?, address = ?, details = ?, update_date = ? WHERE venue_id = ?',
+    [name, address, JSON.stringify(details || {}), now, venueId],
+    function (err) {
+      if (err) return sendError(res, err, 'Failed to update venue');
+      res.json({ venue_id: venueId, name, updated: this.changes });
+    }
+  );
+});
+
+app.put('/api/venues/:id/delete', (req, res) => {
+  const venueId = req.params.id;
+  const now = Date.now();
+
+  db.run('UPDATE venues SET deleted_flag = 1, update_date = ? WHERE venue_id = ?', [now, venueId], function (err) {
+    if (err) return sendError(res, err, 'Failed to delete venue');
+    res.json({ deleted: this.changes });
+  });
+});
+
+app.delete('/api/venues', (req, res) => {
+  db.run('DELETE FROM venues', function (err) {
+    if (err) return sendError(res, err, 'Failed to delete all venues');
+    // Clean up related xref and resources
+    db.run('DELETE FROM venue_court_xref');
+    db.run('DELETE FROM venue_field_xref');
+    db.run('DELETE FROM courts');
+    db.run('DELETE FROM fields');
+    res.json({ deleted: this.changes });
+  });
+});
+
+// 8. COURTS
+app.get('/api/venues/:venueId/courts', (req, res) => {
+  const venueId = req.params.venueId;
+  db.all(`
+    SELECT c.*
+    FROM courts c
+    JOIN venue_court_xref vcx ON c.court_id = vcx.court_id
+    WHERE vcx.venue_id = ? AND (c.deleted_flag IS NULL OR c.deleted_flag = 0)
+    ORDER BY c.name
+  `, [venueId], (err, rows) => {
+    if (err) return sendError(res, err, 'Failed to fetch courts');
+    res.json(rows);
+  });
+});
+
+app.post('/api/venues/:venueId/courts', (req, res) => {
+  const venueId = req.params.venueId;
+  const { name, surface } = req.body;
   const now = Date.now();
   const guid = uuidv4();
 
+  if (!name) return sendError(res, new Error('Validation'), 'Name required', 400);
+
   db.serialize(() => {
-    // 1. Create Event
     db.run(
-      `INSERT INTO events (guid, name, start_date, end_date, description, status, create_date, update_date) 
-       VALUES (?, ?, ?, ?, ?, 'Scheduled', ?, ?)`,
-      [guid, name, startDate, endDate, description, now, now],
+      'INSERT INTO courts (guid, name, surface, create_date, update_date) VALUES (?, ?, ?, ?, ?)',
+      [guid, name, surface, now, now],
       function (err) {
-        if (err) return sendError(res, err, 'Failed to create event');
-        const eventId = this.lastID;
+        if (err) return sendError(res, err, 'Failed to create court');
+        const courtId = this.lastID;
 
-        // 2. Link Venues
-        if (venueIds.length > 0) {
-          const vStmt = db.prepare(`INSERT INTO event_venue_xref (event_id, venue_id, create_date, update_date) VALUES (?, ?, ?, ?)`);
-          venueIds.forEach(vid => vStmt.run(eventId, vid, now, now));
-          vStmt.finalize();
-        }
+        db.run(
+          'INSERT INTO venue_court_xref (venue_id, court_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+          [venueId, courtId, now, now]
+        );
 
-        // 3. Link Teams
-        if (teamIds.length > 0) {
-          const tStmt = db.prepare(`INSERT INTO event_team_xref (event_id, team_id, create_date, update_date) VALUES (?, ?, ?, ?)`);
-          teamIds.forEach(tid => tStmt.run(eventId, tid, now, now));
-          tStmt.finalize();
-        }
-
-        res.status(201).json({ event_id: eventId, guid, name });
+        res.status(201).json({ court_id: courtId, guid, name, venue_id: venueId });
       }
     );
+  });
+});
+
+app.put('/api/courts/:id', (req, res) => {
+  const courtId = req.params.id;
+  const { name, surface } = req.body;
+  const now = Date.now();
+
+  db.run(
+    'UPDATE courts SET name = ?, surface = ?, update_date = ? WHERE court_id = ?',
+    [name, surface, now, courtId],
+    function (err) {
+      if (err) return sendError(res, err, 'Failed to update court');
+      res.json({ court_id: courtId, name, updated: this.changes });
+    }
+  );
+});
+
+app.delete('/api/courts/:id', (req, res) => {
+  const courtId = req.params.id;
+  const now = Date.now();
+
+  db.run('UPDATE courts SET deleted_flag = 1, update_date = ? WHERE court_id = ?', [now, courtId], function (err) {
+    if (err) return sendError(res, err, 'Failed to delete court');
+    res.json({ deleted: this.changes });
+  });
+});
+
+// 9. FIELDS
+app.get('/api/venues/:venueId/fields', (req, res) => {
+  const venueId = req.params.venueId;
+  db.all(`
+    SELECT f.*
+    FROM fields f
+    JOIN venue_field_xref vfx ON f.field_id = vfx.field_id
+    WHERE vfx.venue_id = ? AND (f.deleted_flag IS NULL OR f.deleted_flag = 0)
+    ORDER BY f.name
+  `, [venueId], (err, rows) => {
+    if (err) return sendError(res, err, 'Failed to fetch fields');
+    res.json(rows);
+  });
+});
+
+app.post('/api/venues/:venueId/fields', (req, res) => {
+  const venueId = req.params.venueId;
+  const { name, surface } = req.body;
+  const now = Date.now();
+  const guid = uuidv4();
+
+  if (!name) return sendError(res, new Error('Validation'), 'Name required', 400);
+
+  db.serialize(() => {
+    db.run(
+      'INSERT INTO fields (guid, name, surface, create_date, update_date) VALUES (?, ?, ?, ?, ?)',
+      [guid, name, surface, now, now],
+      function (err) {
+        if (err) return sendError(res, err, 'Failed to create field');
+        const fieldId = this.lastID;
+
+        db.run(
+          'INSERT INTO venue_field_xref (venue_id, field_id, create_date, update_date) VALUES (?, ?, ?, ?)',
+          [venueId, fieldId, now, now]
+        );
+
+        res.status(201).json({ field_id: fieldId, guid, name, venue_id: venueId });
+      }
+    );
+  });
+});
+
+app.put('/api/fields/:id', (req, res) => {
+  const fieldId = req.params.id;
+  const { name, surface } = req.body;
+  const now = Date.now();
+
+  db.run(
+    'UPDATE fields SET name = ?, surface = ?, update_date = ? WHERE field_id = ?',
+    [name, surface, now, fieldId],
+    function (err) {
+      if (err) return sendError(res, err, 'Failed to update field');
+      res.json({ field_id: fieldId, name, updated: this.changes });
+    }
+  );
+});
+
+app.delete('/api/fields/:id', (req, res) => {
+  const fieldId = req.params.id;
+  const now = Date.now();
+
+  db.run('UPDATE fields SET deleted_flag = 1, update_date = ? WHERE field_id = ?', [now, fieldId], function (err) {
+    if (err) return sendError(res, err, 'Failed to delete field');
+    res.json({ deleted: this.changes });
   });
 });
 
