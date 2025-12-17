@@ -10,13 +10,16 @@ import {
     Modal,
     TextInput,
     ScrollView,
-    Alert
+    Alert,
+    Linking,
+    ActivityIndicator
 } from 'react-native';
 import { databaseService } from '../database/sqlite-service';
 import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
 import { Venue } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
+import { GeocodingService, GeocodingResult } from '../services/geocoding-service';
 
 interface Court {
     court_id: number;
@@ -51,6 +54,58 @@ export default function VenuesScreen() {
     const [resourceName, setResourceName] = useState('');
     const [resourceSurface, setResourceSurface] = useState('');
 
+    // GPS Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
+    const [searchLoading, setSearchLoading] = useState(false);
+
+    // Store geocoded data from selected result
+    const [selectedLat, setSelectedLat] = useState<number | undefined>();
+    const [selectedLon, setSelectedLon] = useState<number | undefined>();
+    const [selectedGeocodedData, setSelectedGeocodedData] = useState<any>();
+
+    // Manual search handler - only called when button is pressed
+    const handleSearch = async () => {
+        console.log('[VenuesScreen] handleSearch called, query:', searchQuery);
+
+        if (!searchQuery.trim()) {
+            console.log('[VenuesScreen] Query is empty, clearing results');
+            setSearchResults([]);
+            return;
+        }
+
+        console.log('[VenuesScreen] Starting search...');
+        setSearchLoading(true);
+        try {
+            const results = await GeocodingService.search(searchQuery);
+            console.log('[VenuesScreen] Search results received:', results.length, 'items');
+            setSearchResults(results);
+        } catch (error) {
+            console.error('[VenuesScreen] Search error:', error);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    const handleSearchChange = (text: string) => {
+        setSearchQuery(text);
+        // Clear results when typing to indicate new search needed
+        if (searchResults.length > 0) setSearchResults([]);
+    };
+
+    const handleSelectResult = (result: GeocodingResult) => {
+        setVenueName(result.name);
+        setVenueAddress(result.displayAddress);
+
+        // Store geocoded data
+        setSelectedLat(parseFloat(result.lat));
+        setSelectedLon(parseFloat(result.lon));
+        setSelectedGeocodedData(result.geocodedData);
+
+        setSearchQuery('');
+        setSearchResults([]);
+    };
+
     // Bulk creation mode
     const [bulkMode, setBulkMode] = useState(false);
     const [bulkCount, setBulkCount] = useState('4');
@@ -58,6 +113,9 @@ export default function VenuesScreen() {
     // Confirmation modal
     const [confirmVisible, setConfirmVisible] = useState(false);
     const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, isDestructive: false });
+
+    // Venue List Search State (different from GPS searchQuery in venue modal)
+    const [venueFilterText, setVenueFilterText] = useState('');
 
     // Expanded venue tracking
     const [expandedVenueId, setExpandedVenueId] = useState<number | null>(null);
@@ -97,6 +155,14 @@ export default function VenuesScreen() {
         setEditingVenue(null);
         setVenueName('');
         setVenueAddress('');
+        setSearchQuery('');
+        setSearchResults([]);
+
+        // Clear geocoded data
+        setSelectedLat(undefined);
+        setSelectedLon(undefined);
+        setSelectedGeocodedData(undefined);
+
         setShowVenueModal(true);
     };
 
@@ -104,6 +170,8 @@ export default function VenuesScreen() {
         setEditingVenue(venue);
         setVenueName(venue.name);
         setVenueAddress(venue.address || '');
+        setSearchQuery('');
+        setSearchResults([]);
         setShowVenueModal(true);
     };
 
@@ -115,9 +183,24 @@ export default function VenuesScreen() {
 
         try {
             if (editingVenue?.venue_id) {
-                await databaseService.updateVenue(editingVenue.venue_id, venueName, venueAddress);
+                await databaseService.updateVenue(
+                    editingVenue.venue_id,
+                    venueName,
+                    venueAddress,
+                    undefined, // details
+                    selectedLat,
+                    selectedLon,
+                    selectedGeocodedData
+                );
             } else {
-                await databaseService.createVenue(venueName, venueAddress);
+                await databaseService.createVenue(
+                    venueName,
+                    venueAddress,
+                    undefined, // details
+                    selectedLat,
+                    selectedLon,
+                    selectedGeocodedData
+                );
             }
             setShowVenueModal(false);
             loadData();
@@ -140,15 +223,39 @@ export default function VenuesScreen() {
         setConfirmVisible(true);
     };
 
-    const promptDeleteAll = () => {
+    const promptDeleteAllVenues = () => {
+        // Get filtered venues based on current search
+        const filteredVenues = venueFilterText
+            ? venues.filter(v => {
+                const search = venueFilterText.toLowerCase();
+                const name = v.name.toLowerCase();
+                const address = (v.address || '').toLowerCase();
+                const courts = v.courts.map(c => c.name).join(' ').toLowerCase();
+                const fields = v.fields.map(f => f.name).join(' ').toLowerCase();
+                return name.includes(search) || address.includes(search) || courts.includes(search) || fields.includes(search);
+            })
+            : venues;
+
+        const isFiltered = venueFilterText.trim() !== '';
         setConfirmConfig({
-            title: 'Delete All Venues?',
-            message: 'This will permanently remove ALL venues, courts, and fields. This cannot be undone.',
+            title: isFiltered ? `Delete ${filteredVenues.length} Filtered Venue${filteredVenues.length !== 1 ? 's' : ''}?` : 'Delete All Venues?',
+            message: isFiltered
+                ? `This will permanently delete the ${filteredVenues.length} venue(s) that match your current search filter "${venueFilterText}", including all associated courts and fields. Other venues will not be affected. This cannot be undone.`
+                : 'This will permanently delete ALL venues and their associated courts and fields. This cannot be undone.',
             isDestructive: true,
             onConfirm: async () => {
-                await databaseService.deleteAllVenues();
-                setConfirmVisible(false);
-                loadData();
+                try {
+                    // Delete each filtered venue individually
+                    for (const venue of filteredVenues) {
+                        await databaseService.deleteVenue(venue.venue_id);
+                    }
+                    setConfirmVisible(false);
+                    loadData();
+                } catch (e) {
+                    console.error('Delete venues error:', e);
+                    Alert.alert('Error', 'Failed to delete venues');
+                    setConfirmVisible(false);
+                }
             }
         });
         setConfirmVisible(true);
@@ -243,6 +350,92 @@ export default function VenuesScreen() {
         }
     };
 
+    const handleOpenMap = (venue: Venue) => {
+        let mapUrl = '';
+
+        // Try to get URL from geocoded data
+        try {
+            if (venue.geocoded_data) {
+                const geocodedData = typeof venue.geocoded_data === 'string'
+                    ? JSON.parse(venue.geocoded_data)
+                    : venue.geocoded_data;
+
+                // Google Maps URL from place_id
+                if (geocodedData.place_id) {
+                    mapUrl = `https://www.google.com/maps/place/?q=place_id:${geocodedData.place_id}`;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to parse geocoded_data:', e);
+        }
+
+        // Fallback: generic search with address
+        if (!mapUrl && venue.address) {
+            mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`;
+        }
+
+        if (mapUrl) {
+            Linking.openURL(mapUrl).catch(err => {
+                console.error('Failed to open map:', err);
+                Alert.alert('Error', 'Could not open map');
+            });
+        } else {
+            Alert.alert('No Location', 'This venue has no address or location data.');
+        }
+    };
+
+    const handleDeleteAllCourts = (venueId: number, courtCount: number) => {
+        if (courtCount === 0) return;
+
+        setConfirmConfig({
+            title: 'Delete All Courts?',
+            message: `This will permanently delete all ${courtCount} court(s) from this venue.`,
+            isDestructive: true,
+            onConfirm: async () => {
+                try {
+                    const venue = venues.find(v => v.venue_id === venueId);
+                    if (venue) {
+                        for (const court of venue.courts) {
+                            await databaseService.deleteCourt(court.court_id);
+                        }
+                    }
+                    setConfirmVisible(false);
+                    loadData();
+                } catch (e) {
+                    console.error('Failed to delete all courts:', e);
+                    Alert.alert('Error', 'Failed to delete all courts');
+                }
+            }
+        });
+        setConfirmVisible(true);
+    };
+
+    const handleDeleteAllFields = (venueId: number, fieldCount: number) => {
+        if (fieldCount === 0) return;
+
+        setConfirmConfig({
+            title: 'Delete All Fields?',
+            message: `This will permanently delete all ${fieldCount} field(s) from this venue.`,
+            isDestructive: true,
+            onConfirm: async () => {
+                try {
+                    const venue = venues.find(v => v.venue_id === venueId);
+                    if (venue) {
+                        for (const field of venue.fields) {
+                            await databaseService.deleteField(field.field_id);
+                        }
+                    }
+                    setConfirmVisible(false);
+                    loadData();
+                } catch (e) {
+                    console.error('Failed to delete all fields:', e);
+                    Alert.alert('Error', 'Failed to delete all fields');
+                }
+            }
+        });
+        setConfirmVisible(true);
+    };
+
     const renderVenueCard = ({ item }: { item: VenueWithResources }) => {
         const isExpanded = expandedVenueId === item.venue_id;
         const totalResources = item.courts.length + item.fields.length;
@@ -252,7 +445,18 @@ export default function VenuesScreen() {
                 <TouchableOpacity onPress={() => setExpandedVenueId(isExpanded ? null : item.venue_id)}>
                     <View style={styles.cardHeader}>
                         <View style={{ flex: 1 }}>
-                            <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>{item.name}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>{item.name}</Text>
+                                <TouchableOpacity
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenMap(item);
+                                    }}
+                                    style={{ padding: 4 }}
+                                >
+                                    <Text style={{ fontSize: 18 }}>🗺️</Text>
+                                </TouchableOpacity>
+                            </View>
                             {item.address && (
                                 <Text style={[styles.cardSubtitle, { color: theme.colors.muted }]}>📍 {item.address}</Text>
                             )}
@@ -270,12 +474,22 @@ export default function VenuesScreen() {
                         <View style={styles.resourceSection}>
                             <View style={styles.resourceHeader}>
                                 <Text style={[styles.resourceTitle, { color: theme.colors.text }]}>🎾 Courts ({item.courts.length})</Text>
-                                <TouchableOpacity
-                                    style={[styles.addResourceBtn, { backgroundColor: theme.colors.primary }]}
-                                    onPress={() => handleAddResource(item.venue_id, 'court')}
-                                >
-                                    <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>+ Court</Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    {item.courts.length > 0 && (
+                                        <TouchableOpacity
+                                            style={[styles.deleteAllBtn, { backgroundColor: '#d9534f' }]}
+                                            onPress={() => handleDeleteAllCourts(item.venue_id, item.courts.length)}
+                                        >
+                                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Delete All</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity
+                                        style={[styles.addResourceBtn, { backgroundColor: theme.colors.primary }]}
+                                        onPress={() => handleAddResource(item.venue_id, 'court')}
+                                    >
+                                        <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>+ Court</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                             {item.courts.length === 0 ? (
                                 <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>No courts</Text>
@@ -297,12 +511,22 @@ export default function VenuesScreen() {
                         <View style={[styles.resourceSection, { marginTop: 12 }]}>
                             <View style={styles.resourceHeader}>
                                 <Text style={[styles.resourceTitle, { color: theme.colors.text }]}>⚽ Fields ({item.fields.length})</Text>
-                                <TouchableOpacity
-                                    style={[styles.addResourceBtn, { backgroundColor: theme.colors.primary }]}
-                                    onPress={() => handleAddResource(item.venue_id, 'field')}
-                                >
-                                    <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>+ Field</Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    {item.fields.length > 0 && (
+                                        <TouchableOpacity
+                                            style={[styles.deleteAllBtn, { backgroundColor: '#d9534f' }]}
+                                            onPress={() => handleDeleteAllFields(item.venue_id, item.fields.length)}
+                                        >
+                                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Delete All</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity
+                                        style={[styles.addResourceBtn, { backgroundColor: theme.colors.primary }]}
+                                        onPress={() => handleAddResource(item.venue_id, 'field')}
+                                    >
+                                        <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>+ Field</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                             {item.fields.length === 0 ? (
                                 <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>No fields</Text>
@@ -346,9 +570,20 @@ export default function VenuesScreen() {
             <ScreenHeader
                 title="Venues"
                 rightAction={
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity style={[styles.headerBtn, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
-                            <Text style={{ color: 'white', fontWeight: 'bold' }}>Delete All</Text>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAllVenues}>
+                            <Text style={styles.buttonTextWhite}>
+                                {venueFilterText
+                                    ? `Delete Filtered (${venues.filter(v => {
+                                        const search = venueFilterText.toLowerCase();
+                                        const name = v.name.toLowerCase();
+                                        const address = (v.address || '').toLowerCase();
+                                        const courts = v.courts.map(c => c.name).join(' ').toLowerCase();
+                                        const fields = v.fields.map(f => f.name).join(' ').toLowerCase();
+                                        return name.includes(search) || address.includes(search) || courts.includes(search) || fields.includes(search);
+                                    }).length})`
+                                    : `Delete All (${venues.length})`}
+                            </Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.headerBtn, { backgroundColor: theme.colors.primary }]} onPress={handleAddVenue}>
                             <Text style={{ color: 'black', fontWeight: 'bold' }}>+ New Venue</Text>
@@ -358,21 +593,51 @@ export default function VenuesScreen() {
             />
 
             {loading ? (
-                <View style={styles.centered}>
-                    <Text style={{ color: theme.colors.text }}>Loading...</Text>
-                </View>
+                <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} />
             ) : (
-                <FlatList
-                    data={venues}
-                    keyExtractor={item => item.venue_id.toString()}
-                    renderItem={renderVenueCard}
-                    contentContainerStyle={styles.list}
-                    ListEmptyComponent={
-                        <Text style={[styles.emptyText, { color: theme.colors.muted }]}>
-                            No venues yet. Create one to add courts and fields.
+                <>
+                    {/* Search Input and Count */}
+                    <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                        <TextInput
+                            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 8 }]}
+                            placeholder="Search venues..."
+                            placeholderTextColor={theme.colors.muted}
+                            value={venueFilterText}
+                            onChangeText={setVenueFilterText}
+                        />
+                        <Text style={{ color: theme.colors.muted, fontSize: 12, marginBottom: 8 }}>
+                            {venueFilterText
+                                ? `Showing ${venues.filter(v => {
+                                    const search = venueFilterText.toLowerCase();
+                                    const name = v.name.toLowerCase();
+                                    const address = (v.address || '').toLowerCase();
+                                    const courts = v.courts.map(c => c.name).join(' ').toLowerCase();
+                                    const fields = v.fields.map(f => f.name).join(' ').toLowerCase();
+                                    return name.includes(search) || address.includes(search) || courts.includes(search) || fields.includes(search);
+                                }).length} of ${venues.length} venues`
+                                : `${venues.length} venues`}
                         </Text>
-                    }
-                />
+                    </View>
+                    <FlatList
+                        data={venues.filter(v => {
+                            if (!venueFilterText) return true;
+                            const search = venueFilterText.toLowerCase();
+                            const name = v.name.toLowerCase();
+                            const address = (v.address || '').toLowerCase();
+                            const courts = v.courts.map(c => c.name).join(' ').toLowerCase();
+                            const fields = v.fields.map(f => f.name).join(' ').toLowerCase();
+                            return name.includes(search) || address.includes(search) || courts.includes(search) || fields.includes(search);
+                        })}
+                        keyExtractor={item => item.venue_id.toString()}
+                        renderItem={renderVenueCard}
+                        contentContainerStyle={styles.list}
+                        ListEmptyComponent={
+                            <Text style={[styles.emptyText, { color: theme.colors.muted }]}>
+                                No venues yet. Create one to add courts and fields.
+                            </Text>
+                        }
+                    />
+                </>
             )}
 
             {/* Venue Modal */}
@@ -382,6 +647,45 @@ export default function VenuesScreen() {
                         <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>
                             {editingVenue?.venue_id ? 'Edit Venue' : 'New Venue'}
                         </Text>
+
+                        {/* GPS Search Section */}
+                        <Text style={[styles.label, { color: theme.colors.text }]}>🔍 Search Location</Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TextInput
+                                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1 }]}
+                                value={searchQuery}
+                                onChangeText={handleSearchChange}
+                                placeholder="Search by name or address..."
+                                placeholderTextColor={theme.colors.muted}
+                                onSubmitEditing={handleSearch}
+                                returnKeyType="search"
+                            />
+                            <TouchableOpacity
+                                style={[styles.saveBtn, { backgroundColor: theme.colors.primary, opacity: searchLoading ? 0.6 : 1 }]}
+                                onPress={handleSearch}
+                                disabled={searchLoading || !searchQuery.trim()}
+                            >
+                                <Text style={{ color: 'black', fontWeight: 'bold' }}>{searchLoading ? '...' : 'Search'}</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Search Results Dropdown */}
+                        {searchResults.length > 0 && (
+                            <View style={[styles.searchResults, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                                <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
+                                    {searchResults.map((result) => (
+                                        <TouchableOpacity
+                                            key={result.place_id}
+                                            style={[styles.searchResultItem, { borderBottomColor: theme.colors.border }]}
+                                            onPress={() => handleSelectResult(result)}
+                                        >
+                                            <Text style={[styles.resultName, { color: theme.colors.text }]}>{result.name}</Text>
+                                            <Text style={[styles.resultAddress, { color: theme.colors.muted }]}>{result.displayAddress}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
 
                         <Text style={[styles.label, { color: theme.colors.text }]}>Venue Name *</Text>
                         <TextInput
@@ -537,6 +841,10 @@ const styles = StyleSheet.create({
     venueActions: { flexDirection: 'row', gap: 12, marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.1)' },
     actionBtn: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center' },
 
+    // Header button styles (matches other screens)
+    deleteButtonHeader: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+    buttonTextWhite: { color: 'white', fontWeight: 'bold' },
+
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
     modalContent: { width: '90%', maxWidth: MAX_CONTENT_WIDTH, borderRadius: 12, borderWidth: 1, padding: 20 },
@@ -550,5 +858,36 @@ const styles = StyleSheet.create({
 
     // Mode toggle for bulk creation
     modeToggle: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-    modeBtn: { flex: 1, padding: 10, borderWidth: 1, borderRadius: 8, alignItems: 'center' }
+    modeBtn: { flex: 1, padding: 10, borderWidth: 1, borderRadius: 8, alignItems: 'center' },
+
+    // Search Results
+    searchResults: {
+        position: 'relative',
+        zIndex: 1000,
+        borderWidth: 1,
+        borderTopWidth: 0,
+        borderRadius: 8,
+        marginTop: -10,
+        marginBottom: 16,
+        overflow: 'hidden'
+    },
+    searchResultItem: {
+        padding: 12,
+        borderBottomWidth: 1
+    },
+    deleteAllBtn: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    resultName: {
+        fontWeight: 'bold',
+        fontSize: 14,
+        marginBottom: 4
+    },
+    resultAddress: {
+        fontSize: 12
+    }
 });

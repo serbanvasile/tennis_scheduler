@@ -195,11 +195,11 @@ class DatabaseService {
     }
   }
 
-  async createVenue(name: string, address?: string, details?: any): Promise<any> {
+  async createVenue(name: string, address?: string, details?: any, latitude?: number, longitude?: number, geocoded_data?: any): Promise<any> {
     const response = await fetch(`${this.API_URL}/venues`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, address, details })
+      body: JSON.stringify({ name, address, details, latitude, longitude, geocoded_data })
     });
     return await response.json();
   }
@@ -224,6 +224,7 @@ class DatabaseService {
     // xref IDs
     venueIds?: number[];
     teamIds?: number[];
+    memberIds?: number[];
     eventTypeIds?: number[];
     systemIds?: number[];
     courtIds?: number[];
@@ -255,6 +256,8 @@ class DatabaseService {
     startDate: number;
     description?: string;
     venueIds?: number[];
+    teamIds?: number[];
+    memberIds?: number[];
     eventTypeIds?: number[];
     systemIds?: number[];
     courtIds?: number[];
@@ -275,11 +278,11 @@ class DatabaseService {
 
   // --- VENUES CRUD ---
 
-  async updateVenue(venueId: number, name: string, address?: string, details?: any): Promise<any> {
+  async updateVenue(venueId: number, name: string, address?: string, details?: any, latitude?: number, longitude?: number, geocoded_data?: any): Promise<any> {
     const response = await fetch(`${this.API_URL}/venues/${venueId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, address, details })
+      body: JSON.stringify({ name, address, details, latitude, longitude, geocoded_data })
     });
     return await response.json();
   }

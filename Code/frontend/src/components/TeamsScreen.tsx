@@ -45,6 +45,9 @@ export default function TeamsScreen() {
         isDestructive: false
     });
 
+    // Search State
+    const [searchQuery, setSearchQuery] = useState('');
+
     useFocusEffect(
         useCallback(() => {
             loadData();
@@ -175,24 +178,35 @@ export default function TeamsScreen() {
     };
 
     const promptDeleteAll = () => {
+        // Get filtered teams based on current search
+        const filteredTeams = searchQuery
+            ? teams.filter(t => {
+                const search = searchQuery.toLowerCase();
+                const name = t.name.toLowerCase();
+                const sport = (t.sport_name || '').toLowerCase();
+                const colors = (t.team_colors || '').toLowerCase();
+                return name.includes(search) || sport.includes(search) || colors.includes(search);
+            })
+            : teams;
+
+        const isFiltered = searchQuery.trim() !== '';
         setConfirmConfig({
-            title: 'Delete All Teams?',
-            message: 'This will permanently remove ALL teams from the database. This action cannot be undone.',
+            title: isFiltered ? `Delete ${filteredTeams.length} Filtered Team${filteredTeams.length !== 1 ? 's' : ''}?` : 'Delete All Teams?',
+            message: isFiltered
+                ? `This will permanently delete the ${filteredTeams.length} team(s) that match your current search filter "${searchQuery}". Other teams will not be affected. This cannot be undone.`
+                : 'This will permanently remove ALL teams from the database. This action cannot be undone.',
             isDestructive: true,
             onConfirm: async () => {
                 try {
-                    const result = await databaseService.deleteAllTeams();
-                    console.log('Delete all teams result:', result);
-                    if (result.error) {
-                        showAlert('Cannot Delete Teams', result.message || 'Some teams have members assigned.');
-                        setConfirmVisible(false);
-                        return;
+                    // Delete each filtered team individually
+                    for (const team of filteredTeams) {
+                        await databaseService.deleteTeam(team.team_id);
                     }
                     setConfirmVisible(false);
                     loadData();
                 } catch (e: any) {
-                    console.error('Delete all teams error:', e);
-                    const errorMessage = e?.message || 'Failed to delete all teams';
+                    console.error('Delete teams error:', e);
+                    const errorMessage = e?.message || 'Failed to delete teams';
                     showAlert('Error', errorMessage);
                     setConfirmVisible(false);
                 }
@@ -248,7 +262,17 @@ export default function TeamsScreen() {
                 rightAction={
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                         <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
-                            <Text style={styles.buttonTextWhite}>Delete All</Text>
+                            <Text style={styles.buttonTextWhite}>
+                                {searchQuery
+                                    ? `Delete Filtered (${teams.filter(t => {
+                                        const search = searchQuery.toLowerCase();
+                                        const name = t.name.toLowerCase();
+                                        const sport = (t.sport_name || '').toLowerCase();
+                                        const colors = (t.team_colors || '').toLowerCase();
+                                        return name.includes(search) || sport.includes(search) || colors.includes(search);
+                                    }).length})`
+                                    : `Delete All (${teams.length})`}
+                            </Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => { resetForm(); setModalVisible(true); }}>
                             <Text style={styles.addButtonText}>+ New Team</Text>
@@ -260,12 +284,42 @@ export default function TeamsScreen() {
             {loading ? (
                 <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} />
             ) : (
-                <FlatList
-                    data={teams}
-                    keyExtractor={t => t.team_id.toString()}
-                    renderItem={renderTeamCard}
-                    contentContainerStyle={styles.list}
-                />
+                <>
+                    {/* Search Input and Count */}
+                    <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                        <TextInput
+                            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 8 }]}
+                            placeholder="Search teams..."
+                            placeholderTextColor={theme.colors.muted}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                        <Text style={{ color: theme.colors.muted, fontSize: 12, marginBottom: 8 }}>
+                            {searchQuery
+                                ? `Showing ${teams.filter(t => {
+                                    const search = searchQuery.toLowerCase();
+                                    const name = t.name.toLowerCase();
+                                    const sport = (t.sport_name || '').toLowerCase();
+                                    const colors = (t.team_colors || '').toLowerCase();
+                                    return name.includes(search) || sport.includes(search) || colors.includes(search);
+                                }).length} of ${teams.length} teams`
+                                : `${teams.length} teams`}
+                        </Text>
+                    </View>
+                    <FlatList
+                        data={teams.filter(t => {
+                            if (!searchQuery) return true;
+                            const search = searchQuery.toLowerCase();
+                            const name = t.name.toLowerCase();
+                            const sport = (t.sport_name || '').toLowerCase();
+                            const colors = (t.team_colors || '').toLowerCase();
+                            return name.includes(search) || sport.includes(search) || colors.includes(search);
+                        })}
+                        keyExtractor={t => t.team_id.toString()}
+                        renderItem={renderTeamCard}
+                        contentContainerStyle={styles.list}
+                    />
+                </>
             )}
 
             <Modal visible={modalVisible} transparent animationType="slide">

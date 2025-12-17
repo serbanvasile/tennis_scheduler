@@ -1,7 +1,23 @@
 import React from 'react';
-import { ColorValue } from 'react-native';
+import { ColorValue, Dimensions, Platform } from 'react-native';
 
-export const MAX_CONTENT_WIDTH = '50%';
+// Log window dimensions for debugging
+if (typeof window !== 'undefined') {
+  const dims = Dimensions.get('window');
+  console.log('🖥️ Window dimensions:', dims);
+  console.log('📱 Device type:', dims.width > 768 ? 'Desktop/Tablet' : 'Phone');
+  console.log('🌐 Viewport width (CSS):', typeof document !== 'undefined' ? `${window.innerWidth}px` : 'N/A');
+}
+
+// Max content width for modals and forms - responsive based on actual viewport
+const getResponsiveWidth = () => {
+  if (typeof window !== 'undefined') {
+    // Use innerWidth which respects device emulation in DevTools
+    return window.innerWidth <= 768 ? '95%' : '60%';
+  }
+  return '60%';
+};
+export const MAX_CONTENT_WIDTH = getResponsiveWidth();
 
 export type Theme = {
   name: 'light' | 'dark';

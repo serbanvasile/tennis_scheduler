@@ -292,12 +292,31 @@ export default function RosterScreen() {
   };
 
   const promptDeleteAll = () => {
+    // Get filtered members based on current search
+    const filteredMembers = rosterFilterText
+      ? members.filter(m => {
+        const search = rosterFilterText.toLowerCase();
+        const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
+        const displayN = (m.display_name || '').toLowerCase();
+        const teamsStr = (m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ').toLowerCase() || '';
+        const phoneStr = ((m as any).phone || '').toLowerCase();
+        const emailStr = ((m as any).email || '').toLowerCase();
+        return fullName.includes(search) || displayN.includes(search) || teamsStr.includes(search) || phoneStr.includes(search) || emailStr.includes(search);
+      })
+      : members;
+
+    const isFiltered = rosterFilterText.trim() !== '';
     setConfirmConfig({
-      title: 'Delete All Members?',
-      message: 'This will permanently remove ALL members. This cannot be undone.',
+      title: isFiltered ? `Delete ${filteredMembers.length} Filtered Member${filteredMembers.length !== 1 ? 's' : ''}?` : 'Delete All Members?',
+      message: isFiltered
+        ? `This will permanently delete the ${filteredMembers.length} member(s) that match your current search filter "${rosterFilterText}". Other members will not be affected. This cannot be undone.`
+        : 'This will permanently remove ALL members from the database. This cannot be undone.',
       isDestructive: true,
       onConfirm: async () => {
-        await databaseService.deleteAllMembers();
+        // Delete each filtered member individually
+        for (const member of filteredMembers) {
+          await databaseService.deleteMember(member.member_id);
+        }
         setConfirmVisible(false);
         loadData();
       }
@@ -390,7 +409,19 @@ export default function RosterScreen() {
         rightAction={
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
-              <Text style={styles.buttonTextWhite}>Delete All</Text>
+              <Text style={styles.buttonTextWhite}>
+                {rosterFilterText
+                  ? `Delete Filtered (${members.filter(m => {
+                    const search = rosterFilterText.toLowerCase();
+                    const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
+                    const displayN = (m.display_name || '').toLowerCase();
+                    const teamsStr = (m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ').toLowerCase() || '';
+                    const phoneStr = ((m as any).phone || '').toLowerCase();
+                    const emailStr = ((m as any).email || '').toLowerCase();
+                    return fullName.includes(search) || displayN.includes(search) || teamsStr.includes(search) || phoneStr.includes(search) || emailStr.includes(search);
+                  }).length})`
+                  : `Delete All (${members.length})`}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={handleImportClick}>
               <Text style={styles.addButtonText}>+ Import</Text>

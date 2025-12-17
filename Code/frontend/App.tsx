@@ -213,9 +213,9 @@ function AppContent() {
             }}
           >
             <Tab.Screen name="Teams" component={TeamsScreen} />
-            <Tab.Screen name="Calendar" component={CalendarScreen} />
-            <Tab.Screen name="Venues" component={VenuesScreen} />
             <Tab.Screen name="Roster" component={RosterScreen} />
+            <Tab.Screen name="Venues" component={VenuesScreen} />
+            <Tab.Screen name="Events" component={CalendarScreen} />
             <Tab.Screen name="Analytics" component={AnalyticsScreen} />
           </Tab.Navigator>
         </NavigationContainer>

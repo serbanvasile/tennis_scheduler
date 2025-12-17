@@ -32,6 +32,8 @@ interface EventFormState {
   venueIds: number[];
   courtIds: number[];
   fieldIds: number[];
+  teamIds: number[];
+  memberIds: number[];
   // Series options
   isSeriesEvent: boolean;
   repeatPeriod: 'hours' | 'days' | 'weeks';
@@ -50,6 +52,8 @@ const defaultFormState: EventFormState = {
   venueIds: [],
   courtIds: [],
   fieldIds: [],
+  teamIds: [],
+  memberIds: [],
   isSeriesEvent: false,
   repeatPeriod: 'weeks',
   repeatInterval: 1,
@@ -143,6 +147,12 @@ export default function CalendarScreen() {
   const [courtSelectionMode, setCourtSelectionMode] = useState<'all' | 'select' | 'count'>('all');
   const [courtCount, setCourtCount] = useState('4');
 
+  // Teams and Members
+  const [teams, setTeams] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [teamSearchQuery, setTeamSearchQuery] = useState('');
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+
   const { theme } = useTheme();
 
   useFocusEffect(
@@ -154,13 +164,17 @@ export default function CalendarScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [eventsData, venuesData, lookups] = await Promise.all([
+      const [eventsData, venuesData, lookups, teamsData, membersData] = await Promise.all([
         databaseService.getAllEvents(),
         databaseService.getVenues(),
-        databaseService.getLookups()
+        databaseService.getLookups(),
+        databaseService.getTeams(),
+        databaseService.getMembers()
       ]);
       setEvents(eventsData);
       setVenues(venuesData);
+      setTeams(teamsData);
+      setMembers(membersData);
       if (lookups) {
         setEventTypes(lookups.eventTypes || []);
         setSystems(lookups.systems || []);
@@ -238,6 +252,8 @@ export default function CalendarScreen() {
       venueIds,
       courtIds,
       fieldIds,
+      teamIds: parseIds((event as any).team_ids),
+      memberIds: parseIds((event as any).member_ids),
       isSeriesEvent: false, // When editing, always treat as single event
       repeatPeriod: event.repeat_period || 'weeks',
       repeatInterval: event.repeat_interval || 1,
@@ -247,6 +263,16 @@ export default function CalendarScreen() {
     // Set court selection mode based on existing data
     if (courtIds.length > 0) {
       setCourtSelectionMode('select');
+    }
+
+    // Auto-show teams/members by populating search with wildcard
+    const parsedTeamIds = parseIds((event as any).team_ids);
+    const parsedMemberIds = parseIds((event as any).member_ids);
+    if (parsedTeamIds.length > 0) {
+      setTeamSearchQuery('*');
+    }
+    if (parsedMemberIds.length > 0) {
+      setMemberSearchQuery('*');
     }
 
     setEditingEventId(event.event_id);
@@ -283,8 +309,12 @@ export default function CalendarScreen() {
         eventTypeIds: formState.eventTypeIds,
         systemIds: formState.systemIds,
         courtIds: formState.courtIds,
-        fieldIds: formState.fieldIds
+        fieldIds: formState.fieldIds,
+        teamIds: formState.teamIds,
+        memberIds: formState.memberIds
       };
+
+      console.log('💾 Saving event with data:', eventData);
 
       if (editingEventId) {
         // Update existing event
@@ -753,6 +783,245 @@ export default function CalendarScreen() {
           )}
         </View>
       )}
+
+      {/* Section 6/7: Teams */}
+      <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          {formState.isSeriesEvent ? '6' : availableCourts.length > 0 ? '6' : '5'}. Teams
+        </Text>
+
+        {/* Team Search with Show All button */}
+        <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+          <TextInput
+            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1, marginRight: 8 }]}
+            value={teamSearchQuery}
+            onChangeText={setTeamSearchQuery}
+            placeholder="Search teams... (use * for wildcard)"
+            placeholderTextColor={theme.colors.muted}
+          />
+          <TouchableOpacity
+            style={[styles.chip, { borderColor: theme.colors.border, paddingHorizontal: 12 }]}
+            onPress={() => setTeamSearchQuery('*')}
+          >
+            <Text style={[styles.chipText, { color: theme.colors.text }]}>Show All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Teams List */}
+        {teamSearchQuery.trim() && (
+          <View style={styles.chipContainer}>
+            {teams
+              .filter(t => {
+                const search = teamSearchQuery.toLowerCase();
+
+                // Wildcard support
+                if (search === '*') return true;
+                if (search.startsWith('*') && search.endsWith('*')) {
+                  const term = search.slice(1, -1);
+                  return t.name.toLowerCase().includes(term) || (t.sport_name || '').toLowerCase().includes(term);
+                }
+                if (search.startsWith('*')) {
+                  const term = search.slice(1);
+                  return t.name.toLowerCase().endsWith(term) || (t.sport_name || '').toLowerCase().endsWith(term);
+                }
+                if (search.endsWith('*')) {
+                  const term = search.slice(0, -1);
+                  return t.name.toLowerCase().startsWith(term) || (t.sport_name || '').toLowerCase().startsWith(term);
+                }
+
+                // Regular search
+                const name = t.name.toLowerCase();
+                const sport = (t.sport_name || '').toLowerCase();
+                return name.includes(search) || sport.includes(search);
+              })
+              .map(team => (
+                <TouchableOpacity
+                  key={team.team_id}
+                  style={[
+                    styles.chip,
+                    { borderColor: theme.colors.border },
+                    formState.teamIds.includes(team.team_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  ]}
+                  onPress={() => {
+                    if (formState.teamIds.includes(team.team_id)) {
+                      // Removing team - check for confirmation if editing existing event
+                      const handleRemove = () => {
+                        const teamMembers = members.filter(m =>
+                          (m as any).teams?.some((t: any) => t.team_id === team.team_id)
+                        ).map(m => m.member_id);
+                        setFormState(prev => ({
+                          ...prev,
+                          teamIds: prev.teamIds.filter(id => id !== team.team_id),
+                          memberIds: prev.memberIds.filter(mid => !teamMembers.includes(mid))
+                        }));
+                      };
+
+                      if (editingEventId) {
+                        const associatedMembers = formState.memberIds.filter(mid => {
+                          const member = members.find(m => m.member_id === mid);
+                          return (member as any).teams?.some((t: any) => t.team_id === team.team_id);
+                        });
+                        if (associatedMembers.length > 0) {
+                          setConfirmConfig({
+                            title: `Remove ${team.name}?`,
+                            message: `This will also remove ${associatedMembers.length} member(s) from this team. Continue?`,
+                            isDestructive: true,
+                            onConfirm: () => {
+                              handleRemove();
+                              setConfirmVisible(false);
+                            }
+                          });
+                          setConfirmVisible(true);
+                        } else {
+                          handleRemove();
+                        }
+                      } else {
+                        handleRemove();
+                      }
+                    } else {
+                      // Adding team
+                      setFormState(prev => ({ ...prev, teamIds: [...prev.teamIds, team.team_id] }));
+                    }
+                  }}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: theme.colors.text },
+                    formState.teamIds.includes(team.team_id) && { color: 'black', fontWeight: 'bold' }
+                  ]}>
+                    {team.name} {team.sport_name ? `(${team.sport_name})` : ''}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </View>
+        )}
+      </View>
+
+      {/* Section 7/8: Members (only if teams selected) */}
+      {formState.teamIds.length > 0 && (
+        <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            {formState.isSeriesEvent ? '7' : availableCourts.length > 0 ? '7' : '6'}. Members
+          </Text>
+
+          {/* Member Search with Show All button */}
+          <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+            <TextInput
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1, marginRight: 8 }]}
+              value={memberSearchQuery}
+              onChangeText={setMemberSearchQuery}
+              placeholder="Search members... (use * for wildcard)"
+              placeholderTextColor={theme.colors.muted}
+            />
+            <TouchableOpacity
+              style={[styles.chip, { borderColor: theme.colors.border, paddingHorizontal: 12 }]}
+              onPress={() => setMemberSearchQuery('*')}
+            >
+              <Text style={[styles.chipText, { color: theme.colors.text }]}>Show All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Members List */}
+          <View style={styles.chipContainer}>
+            {members
+              .filter(m => {
+                if (!memberSearchQuery.trim()) return false; // Show nothing until search
+
+                // Only show members from selected teams
+                const memberTeams = (m as any).teams || [];
+                const isInSelectedTeam = formState.teamIds.some(teamId =>
+                  memberTeams.some((t: any) => t.team_id === teamId)
+                );
+                if (!isInSelectedTeam) return false;
+
+                const search = memberSearchQuery.toLowerCase();
+                const name = `${m.first_name} ${m.last_name}`.toLowerCase();
+
+                // Get role and position from teams matching selected teams
+                const memberTeamsInEvent = (m as any).teams?.filter((t: any) =>
+                  formState.teamIds.includes(t.team_id)
+                ) || [];
+                const roles = memberTeamsInEvent.map((t: any) => t.role_names || '').join(' ').toLowerCase();
+                const positions = memberTeamsInEvent.map((t: any) => t.position_names || '').join(' ').toLowerCase();
+                const searchableText = `${name} ${roles} ${positions}`;
+
+                // Wildcard support
+                if (search === '*') return true;
+                if (search.startsWith('*') && search.endsWith('*')) {
+                  const term = search.slice(1, -1);
+                  return searchableText.includes(term);
+                }
+                if (search.startsWith('*')) {
+                  const term = search.slice(1);
+                  return searchableText.endsWith(term);
+                }
+                if (search.endsWith('*')) {
+                  const term = search.slice(0, -1);
+                  return searchableText.startsWith(term);
+                }
+
+                // Regular search
+                return searchableText.includes(search);
+              })
+              .map(member => (
+                <TouchableOpacity
+                  key={member.member_id}
+                  style={[
+                    styles.chip,
+                    { borderColor: theme.colors.border },
+                    formState.memberIds.includes(member.member_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  ]}
+                  onPress={() => {
+                    if (formState.memberIds.includes(member.member_id)) {
+                      // Remove member
+                      const handleRemove = () => {
+                        setFormState(prev => ({
+                          ...prev,
+                          memberIds: prev.memberIds.filter(id => id !== member.member_id)
+                        }));
+                      };
+
+                      if (editingEventId) {
+                        setConfirmConfig({
+                          title: 'Remove Member?',
+                          message: `Remove ${member.first_name} ${member.last_name} from this event?`,
+                          isDestructive: true,
+                          onConfirm: () => {
+                            handleRemove();
+                            setConfirmVisible(false);
+                          }
+                        });
+                        setConfirmVisible(true);
+                      } else {
+                        handleRemove();
+                      }
+                    } else {
+                      // Add member
+                      setFormState(prev => ({ ...prev, memberIds: [...prev.memberIds, member.member_id] }));
+                    }
+                  }}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: theme.colors.text },
+                    formState.memberIds.includes(member.member_id) && { color: 'black', fontWeight: 'bold' }
+                  ]}>
+                    {member.first_name} {member.last_name}
+                    {(() => {
+                      const memberTeamsInEvent = (member as any).teams?.filter((t: any) =>
+                        formState.teamIds.includes(t.team_id)
+                      ) || [];
+                      const roles = memberTeamsInEvent.map((t: any) => t.role_names).filter(Boolean).join(', ');
+                      const positions = memberTeamsInEvent.map((t: any) => t.position_names).filter(Boolean).join(', ');
+                      const details = [roles, positions].filter(Boolean).join(' • ');
+                      return details ? ` (${details})` : '';
+                    })()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 
@@ -854,7 +1123,7 @@ const styles = StyleSheet.create({
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '90%', maxWidth: MAX_CONTENT_WIDTH, maxHeight: '90%', borderRadius: 12, borderWidth: 1, padding: 20, display: 'flex', flexDirection: 'column' },
+  modalContent: { maxWidth: MAX_CONTENT_WIDTH, maxHeight: '90%', borderRadius: 12, borderWidth: 1, padding: 20, display: 'flex', flexDirection: 'column', alignSelf: 'center', width: '100%' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
   formScroll: { flexGrow: 1, paddingRight: 16 },
 

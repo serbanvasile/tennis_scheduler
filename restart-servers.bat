@@ -43,6 +43,8 @@ if not exist package.json (
 )
 start "Tennis UI Server" cmd /k "npm run restart"
 
+cd /d "%PROJECT_ROOT%"
+
 echo.
 echo ================================
 echo Both servers are starting...

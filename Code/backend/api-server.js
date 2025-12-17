@@ -96,7 +96,9 @@ const dbGet = (sql, params = []) => {
 
 // Promise-based xref linking - waits for ALL inserts to complete
 const linkEventXrefsAsync = async (eventId, xrefs, now) => {
-  const { venueIds = [], teamIds = [], eventTypeIds = [], systemIds = [], courtIds = [], fieldIds = [], seasonId, isTournament } = xrefs;
+  const { venueIds = [], teamIds = [], memberIds = [], eventTypeIds = [], systemIds = [], courtIds = [], fieldIds = [], seasonId, isTournament } = xrefs;
+
+  console.log(`🔗 linkEventXrefsAsync for event ${eventId}:`, { teamIds, memberIds });
 
   const insertPromises = [];
 
@@ -109,8 +111,8 @@ const linkEventXrefsAsync = async (eventId, xrefs, now) => {
 
   teamIds.forEach(id => {
     insertPromises.push(dbRun(
-      'INSERT INTO event_team_xref (event_id, team_id, create_date, update_date) VALUES (?, ?, ?, ?)',
-      [eventId, id, now, now]
+      'INSERT INTO event_team_xref (guid, event_id, team_id, create_date, update_date) VALUES (?, ?, ?, ?, ?)',
+      [uuidv4(), eventId, id, now, now]
     ));
   });
 
@@ -139,6 +141,13 @@ const linkEventXrefsAsync = async (eventId, xrefs, now) => {
     insertPromises.push(dbRun(
       'INSERT INTO event_field_xref (event_id, field_id, create_date, update_date) VALUES (?, ?, ?, ?)',
       [eventId, id, now, now]
+    ));
+  });
+
+  memberIds.forEach(id => {
+    insertPromises.push(dbRun(
+      'INSERT INTO event_member_xref (guid, event_id, member_id, create_date, update_date) VALUES (?, ?, ?, ?, ?)',
+      [uuidv4(), eventId, id, now, now]
     ));
   });
 
@@ -271,6 +280,9 @@ function initializeDatabase() {
       guid TEXT UNIQUE,
       name TEXT NOT NULL,
       address TEXT,
+      latitude REAL,
+      longitude REAL,
+      geocoded_data TEXT,
       details TEXT, -- JSON
       ${standardFields}
     )`);
@@ -442,8 +454,32 @@ function initializeDatabase() {
       FOREIGN KEY(position_id) REFERENCES positions(position_id)
     )`);
 
+    // event_team_xref - links events to teams
+    db.run(`CREATE TABLE IF NOT EXISTS event_team_xref (
+      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guid TEXT UNIQUE NOT NULL,
+      event_id INTEGER NOT NULL,
+      team_id INTEGER NOT NULL,
+      ${standardFields},
+      FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+      FOREIGN KEY(team_id) REFERENCES teams(team_id) ON DELETE CASCADE,
+      UNIQUE(event_id, team_id)
+    )`);
+
+    // event_member_xref - links events to members
+    db.run(`CREATE TABLE IF NOT EXISTS event_member_xref (
+      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guid TEXT UNIQUE NOT NULL,
+      event_id INTEGER NOT NULL,
+      member_id INTEGER NOT NULL,
+      ${standardFields},
+      FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+      FOREIGN KEY(member_id) REFERENCES members(member_id) ON DELETE CASCADE,
+      UNIQUE(event_id, member_id)
+    )`)
+      ;
     // 5.6 member_contact_xref
-    db.run(`CREATE TABLE IF NOT EXISTS member_contact_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS member_contact_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       member_id INTEGER NOT NULL,
       contact_id INTEGER NOT NULL,
@@ -453,7 +489,7 @@ function initializeDatabase() {
     )`);
 
     // 6. event_venue_xref
-    db.run(`CREATE TABLE IF NOT EXISTS event_venue_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS event_venue_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
       venue_id INTEGER NOT NULL,
@@ -464,7 +500,7 @@ function initializeDatabase() {
     )`);
 
     // 7. event_team_xref
-    db.run(`CREATE TABLE IF NOT EXISTS event_team_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS event_team_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
       team_id INTEGER NOT NULL,
@@ -477,7 +513,7 @@ function initializeDatabase() {
 
     // 8. event_eventType_xref
     // Usually 1:1, but request asked for xref.
-    db.run(`CREATE TABLE IF NOT EXISTS event_eventType_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS event_eventType_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
       eventType_id INTEGER NOT NULL,
@@ -487,7 +523,7 @@ function initializeDatabase() {
     )`);
 
     // 9. member_contact_xref
-    db.run(`CREATE TABLE IF NOT EXISTS member_contact_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS member_contact_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       member_id INTEGER NOT NULL,
       contact_id INTEGER NOT NULL,
@@ -499,7 +535,7 @@ function initializeDatabase() {
 
     // 10. venue_court_xref
     // A venue has many courts.
-    db.run(`CREATE TABLE IF NOT EXISTS venue_court_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS venue_court_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       venue_id INTEGER NOT NULL,
       court_id INTEGER NOT NULL,
@@ -509,7 +545,7 @@ function initializeDatabase() {
     )`);
 
     // 11. venue_field_xref
-    db.run(`CREATE TABLE IF NOT EXISTS venue_field_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS venue_field_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       venue_id INTEGER NOT NULL,
       field_id INTEGER NOT NULL,
@@ -519,7 +555,7 @@ function initializeDatabase() {
     )`);
 
     // 12. team_contact_xref
-    db.run(`CREATE TABLE IF NOT EXISTS team_contact_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS team_contact_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       team_id INTEGER NOT NULL,
       contact_id INTEGER NOT NULL,
@@ -529,7 +565,7 @@ function initializeDatabase() {
     )`);
 
     // 13. sport_season_xref
-    db.run(`CREATE TABLE IF NOT EXISTS sport_season_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS sport_season_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       sport_id INTEGER NOT NULL,
       season_id INTEGER NOT NULL,
@@ -539,7 +575,7 @@ function initializeDatabase() {
     )`);
 
     // 14. team_season_xref
-    db.run(`CREATE TABLE IF NOT EXISTS team_season_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS team_season_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       team_id INTEGER NOT NULL,
       season_id INTEGER NOT NULL,
@@ -549,7 +585,7 @@ function initializeDatabase() {
     )`);
 
     // 15. event_system_xref - links events to scheduling systems
-    db.run(`CREATE TABLE IF NOT EXISTS event_system_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS event_system_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
       system_id INTEGER NOT NULL,
@@ -559,7 +595,7 @@ function initializeDatabase() {
     )`);
 
     // 16. event_court_xref - links events to courts (tennis, pickleball, etc)
-    db.run(`CREATE TABLE IF NOT EXISTS event_court_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS event_court_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
       court_id INTEGER NOT NULL,
@@ -569,7 +605,7 @@ function initializeDatabase() {
     )`);
 
     // 17. event_field_xref - links events to fields (soccer, football, etc)
-    db.run(`CREATE TABLE IF NOT EXISTS event_field_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS event_field_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
       field_id INTEGER NOT NULL,
@@ -579,11 +615,11 @@ function initializeDatabase() {
     )`);
 
     // 18. event_season_xref - links events to seasons/tournaments
-    db.run(`CREATE TABLE IF NOT EXISTS event_season_xref (
+    db.run(`CREATE TABLE IF NOT EXISTS event_season_xref(
       ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
       season_id INTEGER NOT NULL,
-      is_tournament INTEGER DEFAULT 0, -- 0 = regular season, 1 = tournament
+      is_tournament INTEGER DEFAULT 0, --0 = regular season, 1 = tournament
       ${standardFields},
       FOREIGN KEY(event_id) REFERENCES events(event_id),
       FOREIGN KEY(season_id) REFERENCES seasons(season_id)
@@ -607,7 +643,7 @@ function seedReferenceData() {
       const sports = ['Tennis', 'Basketball', 'Soccer', 'Volleyball', 'Pickleball'];
       const users = ['System'];
       const roles = ['Player', 'Captain', 'Coach', 'Admin', 'Reserve'];
-      const eventTypes = ['Match', 'Practice', 'Meeting', 'Tournament'];
+      const eventTypes = ['Match', 'Pickup', 'Practice', 'Meeting', 'Tournament'];
 
       // Seed Sports
       const stmtSport = db.prepare('INSERT INTO sports (guid, name, create_date, update_date) VALUES (?, ?, ?, ?)');
@@ -625,7 +661,7 @@ function seedReferenceData() {
       stmtET.finalize();
 
       // Seed Systems (scheduling/tournament systems)
-      const systems = ['Round Robin', 'Playoff', 'Swiss', 'Elimination', 'League Play', 'Practice'];
+      const systems = ['Friendly', 'Round Robin', 'Playoff', 'Swiss', 'Elimination', 'League Play'];
       const stmtSys = db.prepare('INSERT INTO systems (guid, name, create_date, update_date) VALUES (?, ?, ?, ?)');
       systems.forEach(s => stmtSys.run(uuidv4(), s, now, now));
       stmtSys.finalize();
@@ -679,7 +715,7 @@ function seedPositions() {
                 db.run("INSERT INTO positions (guid, name, sport_id, create_date, update_date) VALUES (?, ?, ?, ?, ?)",
                   [uuidv4(), posName, sportId, now, now],
                   (err) => {
-                    if (err) console.error(`Failed to seed position ${posName}:`, err);
+                    if (err) console.error(`Failed to seed position ${posName}: `, err);
                   }
                 );
               }
@@ -770,6 +806,27 @@ function seedSkills() {
 // Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', database: 'team_sports.db', timestamp: new Date().toISOString() });
+});
+
+// Google Maps API Proxy (to avoid CORS errors in browser)
+app.get('/api/geocode', async (req, res) => {
+  const query = req.query.q;
+  const GOOGLE_MAPS_API_KEY = 'AIzaSyAqOnn8hRcEuC9N1AV0Oq7xxaFO6T3O2yM';
+
+  if (!query) {
+    return res.status(400).json({ error: 'Query parameter "q" is required' });
+  }
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${GOOGLE_MAPS_API_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    res.json(data);
+  } catch (error) {
+    console.error('Google Maps API error:', error);
+    res.status(500).json({ error: 'Failed to fetch from Google Maps API', details: error.message });
+  }
 });
 
 // --- API ROUTES ---
@@ -1352,22 +1409,22 @@ app.post('/api/teams/:teamId/members', (req, res) => {
 
 // 5. VENUES
 app.get('/api/venues', (req, res) => {
-  db.all('SELECT * FROM venues ORDER BY name', (err, rows) => {
+  db.all('SELECT * FROM venues WHERE (deleted_flag IS NULL OR deleted_flag = 0) ORDER BY name', (err, rows) => {
     if (err) return sendError(res, err, 'Failed to fetch venues');
     res.json(rows);
   });
 });
 
 app.post('/api/venues', (req, res) => {
-  const { name, address, details } = req.body;
+  const { name, address, details, latitude, longitude, geocoded_data } = req.body;
   if (!name) return sendError(res, new Error('Validation'), 'Name required', 400);
 
   const now = Date.now();
   const guid = uuidv4();
 
   db.run(
-    `INSERT INTO venues (guid, name, address, details, create_date, update_date) VALUES (?, ?, ?, ?, ?, ?)`,
-    [guid, name, address, JSON.stringify(details || {}), now, now],
+    `INSERT INTO venues (guid, name, address, latitude, longitude, geocoded_data, details, create_date, update_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [guid, name, address, latitude, longitude, JSON.stringify(geocoded_data || null), JSON.stringify(details || {}), now, now],
     function (err) {
       if (err) return sendError(res, err, 'Failed to create venue');
       res.status(201).json({ venue_id: this.lastID, guid, name });
@@ -1394,6 +1451,8 @@ app.get('/api/events', (req, res) => {
       GROUP_CONCAT(DISTINCT efx.field_id) as field_ids,
       GROUP_CONCAT(DISTINCT t.name) as team_names,
       GROUP_CONCAT(DISTINCT etx.team_id) as team_ids,
+      GROUP_CONCAT(DISTINCT m.first_name || ' ' || m.last_name) as member_names,
+      GROUP_CONCAT(DISTINCT emx.member_id) as member_ids,
       sea.name as season_name,
       esx.is_tournament
     FROM events e
@@ -1409,6 +1468,8 @@ app.get('/api/events', (req, res) => {
     LEFT JOIN fields f ON efx.field_id = f.field_id
     LEFT JOIN event_team_xref etx ON e.event_id = etx.event_id
     LEFT JOIN teams t ON etx.team_id = t.team_id
+    LEFT JOIN event_member_xref emx ON e.event_id = emx.event_id
+    LEFT JOIN members m ON emx.member_id = m.member_id
     LEFT JOIN event_season_xref esx ON e.event_id = esx.event_id
     LEFT JOIN seasons sea ON esx.season_id = sea.season_id
     WHERE e.deleted_flag IS NULL OR e.deleted_flag = 0
@@ -1445,7 +1506,7 @@ app.post('/api/events', async (req, res) => {
     const {
       name, startDate, endDate, description,
       // xref IDs
-      venueIds = [], teamIds = [], eventTypeIds = [], systemIds = [],
+      venueIds = [], teamIds = [], memberIds = [], eventTypeIds = [], systemIds = [],
       courtIds = [], fieldIds = [], seasonId, isTournament = false,
       // Series options
       isSeriesEvent = false,
@@ -1459,8 +1520,9 @@ app.post('/api/events', async (req, res) => {
     }
 
     const now = Date.now();
-    const xrefs = { venueIds, teamIds, eventTypeIds, systemIds, courtIds, fieldIds, seasonId, isTournament };
+    const xrefs = { venueIds, teamIds, memberIds, eventTypeIds, systemIds, courtIds, fieldIds, seasonId, isTournament };
 
+    console.log('🔗 Backend received xrefs:', { teamIds, memberIds, venueIds });
     if (isSeriesEvent && repeatPeriod && totalEvents > 1) {
       // Generate series of events using async/await
       const seriesId = uuidv4();
@@ -1517,7 +1579,7 @@ app.post('/api/events', async (req, res) => {
 app.put('/api/events/:id', async (req, res) => {
   try {
     const eventId = req.params.id;
-    const { name, startDate, endDate, description, venueIds = [], eventTypeIds = [], systemIds = [], courtIds = [], fieldIds = [] } = req.body;
+    const { name, startDate, endDate, description, venueIds = [], teamIds = [], memberIds = [], eventTypeIds = [], systemIds = [], courtIds = [], fieldIds = [] } = req.body;
     const now = Date.now();
 
     // Update event
@@ -1532,11 +1594,13 @@ app.put('/api/events/:id', async (req, res) => {
       dbRun('DELETE FROM event_eventType_xref WHERE event_id = ?', [eventId]),
       dbRun('DELETE FROM event_system_xref WHERE event_id = ?', [eventId]),
       dbRun('DELETE FROM event_court_xref WHERE event_id = ?', [eventId]),
-      dbRun('DELETE FROM event_field_xref WHERE event_id = ?', [eventId])
+      dbRun('DELETE FROM event_field_xref WHERE event_id = ?', [eventId]),
+      dbRun('DELETE FROM event_team_xref WHERE event_id = ?', [eventId]),
+      dbRun('DELETE FROM event_member_xref WHERE event_id = ?', [eventId])
     ]);
 
     // Re-link xrefs and wait for completion
-    const xrefs = { venueIds, eventTypeIds, systemIds, courtIds, fieldIds };
+    const xrefs = { venueIds, teamIds, memberIds, eventTypeIds, systemIds, courtIds, fieldIds };
     await linkEventXrefsAsync(eventId, xrefs, now);
 
     res.json({ event_id: eventId, name, updated: true });
@@ -1599,15 +1663,15 @@ app.delete('/api/events', (req, res) => {
 
 // 7. VENUES - Enhanced CRUD
 app.put('/api/venues/:id', (req, res) => {
-  const { name, address, details } = req.body;
+  const { name, address, details, latitude, longitude, geocoded_data } = req.body;
   const venueId = req.params.id;
   const now = Date.now();
 
   if (!name) return sendError(res, new Error('Validation'), 'Name required', 400);
 
   db.run(
-    'UPDATE venues SET name = ?, address = ?, details = ?, update_date = ? WHERE venue_id = ?',
-    [name, address, JSON.stringify(details || {}), now, venueId],
+    'UPDATE venues SET name = ?, address = ?, latitude = ?, longitude = ?, geocoded_data = ?, details = ?, update_date = ? WHERE venue_id = ?',
+    [name, address, latitude, longitude, JSON.stringify(geocoded_data || null), JSON.stringify(details || {}), now, venueId],
     function (err) {
       if (err) return sendError(res, err, 'Failed to update venue');
       res.json({ venue_id: venueId, name, updated: this.changes });
@@ -1626,14 +1690,16 @@ app.put('/api/venues/:id/delete', (req, res) => {
 });
 
 app.delete('/api/venues', (req, res) => {
-  db.run('DELETE FROM venues', function (err) {
-    if (err) return sendError(res, err, 'Failed to delete all venues');
-    // Clean up related xref and resources
+  // Delete in correct order: xrefs first, then child tables, then venues
+  db.serialize(() => {
     db.run('DELETE FROM venue_court_xref');
     db.run('DELETE FROM venue_field_xref');
     db.run('DELETE FROM courts');
     db.run('DELETE FROM fields');
-    res.json({ deleted: this.changes });
+    db.run('DELETE FROM venues', function (err) {
+      if (err) return sendError(res, err, 'Failed to delete all venues');
+      res.json({ deleted: this.changes });
+    });
   });
 });
 

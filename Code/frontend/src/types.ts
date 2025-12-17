@@ -49,6 +49,9 @@ export interface Venue {
   guid: string;
   name: string;
   address?: string;
+  latitude?: number;
+  longitude?: number;
+  geocoded_data?: string; // JSON string from Google Maps
   details?: any;
 }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Image, ViewStyle, ImageStyle } from 'react-native';
+import { View, Image, ViewStyle, ImageStyle, Platform } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
 interface RemoteImageProps {
@@ -53,8 +53,8 @@ export const RemoteImage: React.FC<RemoteImageProps> = ({
             .replace(/\s+xlink:href=/gi, ' href=');
     };
 
-    // Prefer cached SVG content (works offline)
-    if (svgContent && svgContent.trim() !== '') {
+    // Prefer cached SVG content (works offline) - but skip on web platform
+    if (svgContent && svgContent.trim() !== '' && Platform.OS !== 'web') {
         const cleanedSvg = sanitizeSvg(svgContent);
         return (
             <View style={containerStyle}>
