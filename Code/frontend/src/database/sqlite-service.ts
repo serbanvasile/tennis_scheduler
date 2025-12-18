@@ -55,6 +55,30 @@ class DatabaseService {
     }
   }
 
+  async getPreferences(): Promise<any> {
+    try {
+      const response = await fetch(`${this.API_URL}/preferences`);
+      return await response.json();
+    } catch (err) {
+      console.error('getPreferences failed', err);
+      return { preview_first_count: 4, preview_last_count: 4 };
+    }
+  }
+
+  async updatePreferences(previewFirst: number, previewLast: number): Promise<any> {
+    try {
+      const response = await fetch(`${this.API_URL}/preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview_first_count: previewFirst, preview_last_count: previewLast })
+      });
+      return await response.json();
+    } catch (err) {
+      console.error('updatePreferences failed', err);
+      return {};
+    }
+  }
+
   async getTeams(): Promise<Team[]> {
     try {
       const response = await fetch(`${this.API_URL}/teams`);
@@ -236,6 +260,8 @@ class DatabaseService {
     repeatPeriod?: 'hours' | 'days' | 'weeks';
     repeatInterval?: number;
     totalEvents?: number;
+    lastEventDate?: number; // Timestamp for last event
+    lastEventTime?: string; // Time component
   }): Promise<any> {
     const response = await fetch(`${this.API_URL}/events`, {
       method: 'POST',

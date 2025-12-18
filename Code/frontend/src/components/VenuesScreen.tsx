@@ -586,7 +586,7 @@ export default function VenuesScreen() {
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.headerBtn, { backgroundColor: theme.colors.primary }]} onPress={handleAddVenue}>
-                            <Text style={{ color: 'black', fontWeight: 'bold' }}>+ New Venue</Text>
+                            <Text style={{ color: 'black', fontWeight: 'bold' }}>New Venue</Text>
                         </TouchableOpacity>
                     </View>
                 }

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { databaseService } from '../database/sqlite-service';
 import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
+import { commonStyles } from '../ui/commonStyles';
 import { Team, Color, Sport } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -275,7 +276,7 @@ export default function TeamsScreen() {
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => { resetForm(); setModalVisible(true); }}>
-                            <Text style={styles.addButtonText}>+ New Team</Text>
+                            <Text style={styles.addButtonText}>New Team</Text>
                         </TouchableOpacity>
                     </View>
                 }
@@ -475,11 +476,11 @@ const styles = StyleSheet.create({
     label: { marginBottom: 6, fontWeight: '500' },
     input: { padding: 12, borderRadius: 8, borderWidth: 1 },
 
-    chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1 },
-    colorChip: { flexDirection: 'row', alignItems: 'center', padding: 6, paddingRight: 10, borderRadius: 16, borderWidth: 1 },
+    chipContainer: commonStyles.chipContainer,
+    chip: commonStyles.chip,
+    colorChip: { flexDirection: 'row', alignItems: 'center', padding: 6, paddingRight: 10, borderRadius: 16, borderWidth: 1, maxWidth: '100%' },
     colorPreview: { width: 16, height: 16, borderRadius: 8, marginRight: 6, borderWidth: 1, borderColor: '#fff' },
-    chipText: { fontSize: 12 },
+    chipText: commonStyles.chipText,
 
     modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 10 },
     cancelButton: { padding: 12, borderRadius: 8, borderWidth: 1, minWidth: 80, alignItems: 'center' },

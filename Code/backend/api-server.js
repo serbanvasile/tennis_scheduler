@@ -232,7 +232,6 @@ function initializeDatabase() {
       dominant_side TEXT CHECK(dominant_side IN ('L', 'R', 'A')) DEFAULT 'R',
       share REAL DEFAULT 0,
       share_type TEXT DEFAULT 'R',
-      share_percentage INTEGER DEFAULT 0,
       ${standardFields}
     )`);
 
@@ -320,45 +319,67 @@ function initializeDatabase() {
       repeat_period TEXT CHECK (repeat_period IN ('hours', 'days', 'weeks')),
       repeat_interval INTEGER DEFAULT 1,
       total_events INTEGER,
+      last_event_date INTEGER, -- Optional end boundary for series
+      last_event_time TEXT, -- Time component for last event
+      ${standardFields}
+    )`);
+
+    // 10.5 user_preferences (for UI settings like preview counts)
+    db.run(`CREATE TABLE IF NOT EXISTS user_preferences (
+      pref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guid TEXT UNIQUE,
+      user_id INTEGER DEFAULT 0, -- 0 = global/default preferences
+      preview_first_count INTEGER DEFAULT 4,
+      preview_last_count INTEGER DEFAULT 4,
       ${standardFields}
     )`);
 
     // 11. eventTypes
-    db.run(`CREATE TABLE IF NOT EXISTS eventTypes (
+    db.run(`CREATE TABLE IF NOT EXISTS eventTypes(
       eventType_id INTEGER PRIMARY KEY AUTOINCREMENT,
       guid TEXT UNIQUE,
-      name TEXT NOT NULL UNIQUE, -- e.g. 'Match', 'Practice', 'Tournament'
+      name TEXT NOT NULL UNIQUE, --e.g. 'Match', 'Practice', 'Tournament'
       description TEXT,
       ${standardFields}
     )`);
 
     // 12. seasons
-    db.run(`CREATE TABLE IF NOT EXISTS seasons (
+    db.run(`CREATE TABLE IF NOT EXISTS seasons(
       season_id INTEGER PRIMARY KEY AUTOINCREMENT,
       guid TEXT UNIQUE,
-      name TEXT NOT NULL, -- e.g. 'Fall 2025'
+      name TEXT NOT NULL, --e.g. 'Fall 2025'
       start_date INTEGER,
       end_date INTEGER,
       ${standardFields}
     )`);
 
     // 13. contacts
-    db.run(`CREATE TABLE IF NOT EXISTS contacts (
+    db.run(`CREATE TABLE IF NOT EXISTS contacts(
       contact_id INTEGER PRIMARY KEY AUTOINCREMENT,
       guid TEXT UNIQUE,
-      value TEXT NOT NULL, -- e.g. 'john@doe.com', '555-0123'
+      value TEXT NOT NULL, --e.g. 'john@doe.com', '555-0123'
       type TEXT NOT NULL, -- 'Email', 'Phone', 'Address'
       label TEXT, -- 'Home', 'Work'
       ${standardFields}
     )`);
 
+    // 13.5 contact_labels (lookup table for contact labels)
+    db.run(`CREATE TABLE IF NOT EXISTS contact_labels(
+      label_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guid TEXT UNIQUE,
+      name TEXT NOT NULL UNIQUE,
+      sort_order INTEGER DEFAULT 0,
+      description TEXT,
+      ${standardFields}
+    )`);
+
     // 14. systems (scheduling/tournament systems - sport-agnostic)
-    db.run(`CREATE TABLE IF NOT EXISTS systems (
+    db.run(`CREATE TABLE IF NOT EXISTS systems(
       system_id INTEGER PRIMARY KEY AUTOINCREMENT,
       guid TEXT UNIQUE,
-      name TEXT NOT NULL UNIQUE, -- e.g. 'Round Robin', 'Swiss', 'Elimination'
+      name TEXT NOT NULL UNIQUE, --e.g. 'Round Robin', 'Swiss', 'Elimination'
       description TEXT,
-      config TEXT, -- JSON configuration for the system
+      config TEXT, --JSON configuration for the system
       ${standardFields}
     )`);
 
@@ -366,64 +387,64 @@ function initializeDatabase() {
     // --- XREF TABLES ---
 
     // 1. sport_league_xref
-    db.run(`CREATE TABLE IF NOT EXISTS sport_league_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sport_id INTEGER NOT NULL,
-      league_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(sport_id) REFERENCES sports(sport_id),
-      FOREIGN KEY(league_id) REFERENCES leagues(league_id)
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS sport_league_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sport_id INTEGER NOT NULL,
+        league_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(sport_id) REFERENCES sports(sport_id),
+        FOREIGN KEY(league_id) REFERENCES leagues(league_id)
+      )`);
 
     // 1.5 skill_sport_xref - links skills to sports
-    db.run(`CREATE TABLE IF NOT EXISTS skill_sport_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      skill_id INTEGER NOT NULL,
-      sport_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(skill_id) REFERENCES skills(skill_id),
-      FOREIGN KEY(sport_id) REFERENCES sports(sport_id)
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS skill_sport_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        skill_id INTEGER NOT NULL,
+        sport_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(skill_id) REFERENCES skills(skill_id),
+        FOREIGN KEY(sport_id) REFERENCES sports(sport_id)
+      )`);
 
     // 2. team_league_xref
-    db.run(`CREATE TABLE IF NOT EXISTS team_league_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      team_id INTEGER NOT NULL,
-      league_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(team_id) REFERENCES teams(team_id),
-      FOREIGN KEY(league_id) REFERENCES leagues(league_id)
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS team_league_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id INTEGER NOT NULL,
+        league_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(team_id) REFERENCES teams(team_id),
+        FOREIGN KEY(league_id) REFERENCES leagues(league_id)
+      )`);
 
     // 4. team_sport_xref
-    db.run(`CREATE TABLE IF NOT EXISTS team_sport_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      team_id INTEGER NOT NULL,
-      sport_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(team_id) REFERENCES teams(team_id),
-      FOREIGN KEY(sport_id) REFERENCES sports(sport_id)
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS team_sport_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id INTEGER NOT NULL,
+        sport_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(team_id) REFERENCES teams(team_id),
+        FOREIGN KEY(sport_id) REFERENCES sports(sport_id)
+      )`);
 
     // 5. team_color_xref
-    db.run(`CREATE TABLE IF NOT EXISTS team_color_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      team_id INTEGER NOT NULL,
-      color_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(team_id) REFERENCES teams(team_id),
-      FOREIGN KEY(color_id) REFERENCES colors(color_id)
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS team_color_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id INTEGER NOT NULL,
+        color_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(team_id) REFERENCES teams(team_id),
+        FOREIGN KEY(color_id) REFERENCES colors(color_id)
+      )`);
 
     // 4. team_member_xref
-    db.run(`CREATE TABLE IF NOT EXISTS team_member_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      team_id INTEGER NOT NULL,
-      member_id INTEGER NOT NULL,
-      skill_id INTEGER, -- skill level for this member on this team (sport-specific)
+    db.run(`CREATE TABLE IF NOT EXISTS team_member_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id INTEGER NOT NULL,
+        member_id INTEGER NOT NULL,
+        skill_id INTEGER, --skill level for this member on this team(sport - specific)
       ${standardFields},
       FOREIGN KEY(team_id) REFERENCES teams(team_id),
-      FOREIGN KEY(member_id) REFERENCES members(member_id),
+    FOREIGN KEY(member_id) REFERENCES members(member_id),
       FOREIGN KEY(skill_id) REFERENCES skills(skill_id)
     )`);
 
@@ -431,199 +452,199 @@ function initializeDatabase() {
     // Note: This ties a member to a role. 
     // Context is vague here (Global role? Team specific?). 
     // Often you want team_member_role_xref. But sticking to list:
-    db.run(`CREATE TABLE IF NOT EXISTS member_role_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id INTEGER NOT NULL,
-      role_id INTEGER NOT NULL,
-      context_table TEXT, -- Optional: 'teams', 'leagues'
-      context_id INTEGER, -- Optional: team_id, league_id
+    db.run(`CREATE TABLE IF NOT EXISTS member_role_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER NOT NULL,
+        role_id INTEGER NOT NULL,
+        context_table TEXT, --Optional: 'teams', 'leagues'
+      context_id INTEGER, --Optional: team_id, league_id
       ${standardFields},
-      FOREIGN KEY(member_id) REFERENCES members(member_id),
-      FOREIGN KEY(role_id) REFERENCES roles(role_id)
-    )`);
+        FOREIGN KEY(member_id) REFERENCES members(member_id),
+        FOREIGN KEY(role_id) REFERENCES roles(role_id)
+      )`);
 
     // 5.5 member_position_xref
-    db.run(`CREATE TABLE IF NOT EXISTS member_position_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id INTEGER NOT NULL,
-      position_id INTEGER NOT NULL,
-      context_table TEXT,
-      context_id INTEGER,
-      ${standardFields},
-      FOREIGN KEY(member_id) REFERENCES members(member_id),
-      FOREIGN KEY(position_id) REFERENCES positions(position_id)
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS member_position_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER NOT NULL,
+        position_id INTEGER NOT NULL,
+        context_table TEXT,
+        context_id INTEGER,
+        ${standardFields},
+        FOREIGN KEY(member_id) REFERENCES members(member_id),
+        FOREIGN KEY(position_id) REFERENCES positions(position_id)
+      )`);
 
     // event_team_xref - links events to teams
-    db.run(`CREATE TABLE IF NOT EXISTS event_team_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guid TEXT UNIQUE NOT NULL,
-      event_id INTEGER NOT NULL,
-      team_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE,
-      FOREIGN KEY(team_id) REFERENCES teams(team_id) ON DELETE CASCADE,
-      UNIQUE(event_id, team_id)
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS event_team_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guid TEXT UNIQUE NOT NULL,
+        event_id INTEGER NOT NULL,
+        team_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+        FOREIGN KEY(team_id) REFERENCES teams(team_id) ON DELETE CASCADE,
+        UNIQUE(event_id, team_id)
+      )`);
 
     // event_member_xref - links events to members
-    db.run(`CREATE TABLE IF NOT EXISTS event_member_xref (
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guid TEXT UNIQUE NOT NULL,
-      event_id INTEGER NOT NULL,
-      member_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE,
-      FOREIGN KEY(member_id) REFERENCES members(member_id) ON DELETE CASCADE,
-      UNIQUE(event_id, member_id)
-    )`)
+    db.run(`CREATE TABLE IF NOT EXISTS event_member_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guid TEXT UNIQUE NOT NULL,
+        event_id INTEGER NOT NULL,
+        member_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+        FOREIGN KEY(member_id) REFERENCES members(member_id) ON DELETE CASCADE,
+        UNIQUE(event_id, member_id)
+      )`)
       ;
     // 5.6 member_contact_xref
     db.run(`CREATE TABLE IF NOT EXISTS member_contact_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id INTEGER NOT NULL,
-      contact_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(member_id) REFERENCES members(member_id),
-      FOREIGN KEY(contact_id) REFERENCES contacts(contact_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER NOT NULL,
+        contact_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(member_id) REFERENCES members(member_id),
+        FOREIGN KEY(contact_id) REFERENCES contacts(contact_id)
+      )`);
 
     // 6. event_venue_xref
     db.run(`CREATE TABLE IF NOT EXISTS event_venue_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      venue_id INTEGER NOT NULL,
-      usage_notes TEXT,
-      ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id),
-      FOREIGN KEY(venue_id) REFERENCES venues(venue_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        venue_id INTEGER NOT NULL,
+        usage_notes TEXT,
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id),
+        FOREIGN KEY(venue_id) REFERENCES venues(venue_id)
+      )`);
 
     // 7. event_team_xref
     db.run(`CREATE TABLE IF NOT EXISTS event_team_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      team_id INTEGER NOT NULL,
-      outcome TEXT, -- 'Win', 'Loss', 'Draw'
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        team_id INTEGER NOT NULL,
+        outcome TEXT, -- 'Win', 'Loss', 'Draw'
       score TEXT,
-      ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id),
-      FOREIGN KEY(team_id) REFERENCES teams(team_id)
-    )`);
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id),
+        FOREIGN KEY(team_id) REFERENCES teams(team_id)
+      )`);
 
     // 8. event_eventType_xref
     // Usually 1:1, but request asked for xref.
     db.run(`CREATE TABLE IF NOT EXISTS event_eventType_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      eventType_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id),
-      FOREIGN KEY(eventType_id) REFERENCES eventTypes(eventType_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        eventType_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id),
+        FOREIGN KEY(eventType_id) REFERENCES eventTypes(eventType_id)
+      )`);
 
     // 9. member_contact_xref
     db.run(`CREATE TABLE IF NOT EXISTS member_contact_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id INTEGER NOT NULL,
-      contact_id INTEGER NOT NULL,
-      is_primary INTEGER DEFAULT 0,
-      ${standardFields},
-      FOREIGN KEY(member_id) REFERENCES members(member_id),
-      FOREIGN KEY(contact_id) REFERENCES contacts(contact_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER NOT NULL,
+        contact_id INTEGER NOT NULL,
+        is_primary INTEGER DEFAULT 0,
+        ${standardFields},
+        FOREIGN KEY(member_id) REFERENCES members(member_id),
+        FOREIGN KEY(contact_id) REFERENCES contacts(contact_id)
+      )`);
 
     // 10. venue_court_xref
     // A venue has many courts.
     db.run(`CREATE TABLE IF NOT EXISTS venue_court_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      venue_id INTEGER NOT NULL,
-      court_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(venue_id) REFERENCES venues(venue_id),
-      FOREIGN KEY(court_id) REFERENCES courts(court_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        venue_id INTEGER NOT NULL,
+        court_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(venue_id) REFERENCES venues(venue_id),
+        FOREIGN KEY(court_id) REFERENCES courts(court_id)
+      )`);
 
     // 11. venue_field_xref
     db.run(`CREATE TABLE IF NOT EXISTS venue_field_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      venue_id INTEGER NOT NULL,
-      field_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(venue_id) REFERENCES venues(venue_id),
-      FOREIGN KEY(field_id) REFERENCES fields(field_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        venue_id INTEGER NOT NULL,
+        field_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(venue_id) REFERENCES venues(venue_id),
+        FOREIGN KEY(field_id) REFERENCES fields(field_id)
+      )`);
 
     // 12. team_contact_xref
     db.run(`CREATE TABLE IF NOT EXISTS team_contact_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      team_id INTEGER NOT NULL,
-      contact_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(team_id) REFERENCES teams(team_id),
-      FOREIGN KEY(contact_id) REFERENCES contacts(contact_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id INTEGER NOT NULL,
+        contact_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(team_id) REFERENCES teams(team_id),
+        FOREIGN KEY(contact_id) REFERENCES contacts(contact_id)
+      )`);
 
     // 13. sport_season_xref
     db.run(`CREATE TABLE IF NOT EXISTS sport_season_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sport_id INTEGER NOT NULL,
-      season_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(sport_id) REFERENCES sports(sport_id),
-      FOREIGN KEY(season_id) REFERENCES seasons(season_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sport_id INTEGER NOT NULL,
+        season_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(sport_id) REFERENCES sports(sport_id),
+        FOREIGN KEY(season_id) REFERENCES seasons(season_id)
+      )`);
 
     // 14. team_season_xref
     db.run(`CREATE TABLE IF NOT EXISTS team_season_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      team_id INTEGER NOT NULL,
-      season_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(team_id) REFERENCES teams(team_id),
-      FOREIGN KEY(season_id) REFERENCES seasons(season_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id INTEGER NOT NULL,
+        season_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(team_id) REFERENCES teams(team_id),
+        FOREIGN KEY(season_id) REFERENCES seasons(season_id)
+      )`);
 
     // 15. event_system_xref - links events to scheduling systems
     db.run(`CREATE TABLE IF NOT EXISTS event_system_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      system_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id),
-      FOREIGN KEY(system_id) REFERENCES systems(system_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        system_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id),
+        FOREIGN KEY(system_id) REFERENCES systems(system_id)
+      )`);
 
     // 16. event_court_xref - links events to courts (tennis, pickleball, etc)
     db.run(`CREATE TABLE IF NOT EXISTS event_court_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      court_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id),
-      FOREIGN KEY(court_id) REFERENCES courts(court_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        court_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id),
+        FOREIGN KEY(court_id) REFERENCES courts(court_id)
+      )`);
 
     // 17. event_field_xref - links events to fields (soccer, football, etc)
     db.run(`CREATE TABLE IF NOT EXISTS event_field_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      field_id INTEGER NOT NULL,
-      ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id),
-      FOREIGN KEY(field_id) REFERENCES fields(field_id)
-    )`);
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        field_id INTEGER NOT NULL,
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id),
+        FOREIGN KEY(field_id) REFERENCES fields(field_id)
+      )`);
 
     // 18. event_season_xref - links events to seasons/tournaments
     db.run(`CREATE TABLE IF NOT EXISTS event_season_xref(
-      ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      season_id INTEGER NOT NULL,
-      is_tournament INTEGER DEFAULT 0, --0 = regular season, 1 = tournament
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL,
+        season_id INTEGER NOT NULL,
+        is_tournament INTEGER DEFAULT 0, --0 = regular season, 1 = tournament
       ${standardFields},
-      FOREIGN KEY(event_id) REFERENCES events(event_id),
-      FOREIGN KEY(season_id) REFERENCES seasons(season_id)
-    )`);
+        FOREIGN KEY(event_id) REFERENCES events(event_id),
+        FOREIGN KEY(season_id) REFERENCES seasons(season_id)
+      )`);
 
     console.log('Database tables initialized.');
     seedReferenceData();
@@ -681,7 +702,19 @@ function seedReferenceData() {
       ];
       const stmtColor = db.prepare('INSERT INTO colors (guid, name, hex_code, create_date, update_date) VALUES (?, ?, ?, ?, ?)');
       colors.forEach(c => stmtColor.run(uuidv4(), c.name, c.hex, now, now));
-      stmtColor.finalize(() => {
+      stmtColor.finalize();
+
+      // Seed Contact Labels (ordered: preferred, emergency, other, expired, do not use)
+      const contactLabels = [
+        { name: 'preferred', order: 1 },
+        { name: 'emergency', order: 2 },
+        { name: 'other', order: 3 },
+        { name: 'expired', order: 4 },
+        { name: 'do not use', order: 5 }
+      ];
+      const stmtLabel = db.prepare('INSERT INTO contact_labels (guid, name, sort_order, create_date, update_date) VALUES (?, ?, ?, ?, ?)');
+      contactLabels.forEach(l => stmtLabel.run(uuidv4(), l.name, l.order, now, now));
+      stmtLabel.finalize(() => {
         console.log('Seeding completed. Now seeding positions...');
         seedPositions();
       });
@@ -845,6 +878,48 @@ app.get('/api/colors', (req, res) => {
   });
 });
 
+// 0.5 USER PREFERENCES
+app.get('/api/preferences', (req, res) => {
+  db.get('SELECT * FROM user_preferences WHERE user_id = 0 ORDER BY pref_id DESC LIMIT 1', [], (err, row) => {
+    if (err) return sendError(res, err, 'Failed to fetch preferences');
+    if (!row) {
+      // Return defaults
+      res.json({ preview_first_count: 4, preview_last_count: 4 });
+    } else {
+      res.json(row);
+    }
+  });
+});
+
+app.post('/api/preferences', (req, res) => {
+  const { preview_first_count, preview_last_count } = req.body;
+  const now = Date.now();
+
+  db.get('SELECT * FROM user_preferences WHERE user_id = 0', [], (err, existing) => {
+    if (err) return sendError(res, err, 'Failed to check preferences');
+
+    if (existing) {
+      db.run(
+        'UPDATE user_preferences SET preview_first_count = ?, preview_last_count = ?, update_date = ? WHERE pref_id = ?',
+        [preview_first_count, preview_last_count, now, existing.pref_id],
+        (err) => {
+          if (err) return sendError(res, err, 'Failed to update preferences');
+          res.json({ success: true });
+        }
+      );
+    } else {
+      db.run(
+        'INSERT INTO user_preferences (guid, user_id, preview_first_count, preview_last_count, create_date, update_date) VALUES (?, ?, ?, ?, ?, ?)',
+        [uuidv4(), 0, preview_first_count, preview_last_count, now, now],
+        (err) => {
+          if (err) return sendError(res, err, 'Failed to create preferences');
+          res.json({ success: true });
+        }
+      );
+    }
+  });
+});
+
 // 1. LOOKUPS
 app.get('/api/lookups', (req, res) => {
   const lookups = {};
@@ -882,7 +957,13 @@ app.get('/api/lookups', (req, res) => {
                 if (err) return sendError(res, err, 'Failed to fetch systems');
                 lookups.systems = rows;
 
-                res.json(lookups);
+                // Fetch contact labels (ordered by sort_order)
+                db.all('SELECT * FROM contact_labels ORDER BY sort_order', (err, rows) => {
+                  if (err) return sendError(res, err, 'Failed to fetch contact labels');
+                  lookups.contact_labels = rows;
+
+                  res.json(lookups);
+                });
               });
             });
           });
@@ -1027,7 +1108,7 @@ const saveMemberContacts = (db, memberId, contacts, callback) => {
 };
 
 app.post('/api/members', (req, res) => {
-  const { firstName, lastName, displayName, gender, teams, contacts, dominant_side, share, share_type, share_percentage } = req.body;
+  const { firstName, lastName, displayName, gender, teams, contacts, dominant_side, share, share_type } = req.body;
   if (!firstName || !lastName) return sendError(res, new Error('Validation'), 'Name required', 400);
 
   const now = Date.now();
@@ -1035,9 +1116,9 @@ app.post('/api/members', (req, res) => {
 
   db.serialize(() => {
     db.run(
-      `INSERT INTO members (guid, first_name, last_name, display_name, gender, dominant_side, share, share_type, share_percentage, create_date, update_date) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [guid, firstName, lastName, displayName, gender, dominant_side || 'R', share || 0, share_type || 'R', share_percentage || 0, now, now],
+      `INSERT INTO members (guid, first_name, last_name, display_name, gender, dominant_side, share, share_type, create_date, update_date) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [guid, firstName, lastName, displayName, gender, dominant_side || 'R', share || 0, share_type || 'R', now, now],
       function (err) {
         if (err) return sendError(res, err, 'Failed to create member');
         const memberId = this.lastID;
@@ -1053,12 +1134,12 @@ app.post('/api/members', (req, res) => {
 
 app.put('/api/members/:memberId', (req, res) => {
   const { memberId } = req.params;
-  const { firstName, lastName, displayName, gender, teams, contacts, dominant_side, share, share_type, share_percentage } = req.body;
+  const { firstName, lastName, displayName, gender, teams, contacts, dominant_side, share, share_type } = req.body;
   const now = Date.now();
 
   db.run(
-    `UPDATE members SET first_name=?, last_name=?, display_name=?, gender=?, dominant_side=?, share=?, share_type=?, share_percentage=?, update_date=? WHERE member_id=?`,
-    [firstName, lastName, displayName, gender, dominant_side || 'R', share || 0, share_type || 'R', share_percentage || 0, now, memberId],
+    `UPDATE members SET first_name=?, last_name=?, display_name=?, gender=?, dominant_side=?, share=?, share_type=?, update_date=? WHERE member_id=?`,
+    [firstName, lastName, displayName, gender, dominant_side || 'R', share || 0, share_type || 'R', now, memberId],
     function (err) {
       if (err) return sendError(res, err, 'Failed to update member');
       saveMemberRelations(db, memberId, teams, () => {
@@ -1512,7 +1593,9 @@ app.post('/api/events', async (req, res) => {
       isSeriesEvent = false,
       repeatPeriod,    // 'hours' | 'days' | 'weeks'
       repeatInterval = 1,
-      totalEvents = 1
+      totalEvents = 1,
+      lastEventDate,   // Optional end boundary timestamp
+      lastEventTime    // Optional end boundary time string
     } = req.body;
 
     if (!name || !startDate) {
@@ -1523,22 +1606,34 @@ app.post('/api/events', async (req, res) => {
     const xrefs = { venueIds, teamIds, memberIds, eventTypeIds, systemIds, courtIds, fieldIds, seasonId, isTournament };
 
     console.log('🔗 Backend received xrefs:', { teamIds, memberIds, venueIds });
-    if (isSeriesEvent && repeatPeriod && totalEvents > 1) {
+    if (isSeriesEvent && repeatPeriod && totalEvents > 0) {
       // Generate series of events using async/await
       const seriesId = uuidv4();
       const createdEvents = [];
 
-      for (let i = 0; i < totalEvents; i++) {
+      // Calculate end boundary if provided
+      const lastEventDateTime = lastEventDate && lastEventTime
+        ? lastEventDate  // Already a timestamp from frontend
+        : null;
+
+      // Use totalEvents or 1000 as fallback limit
+      const maxIterations = totalEvents || 1000;
+
+      for (let i = 0; i < maxIterations; i++) {
         const eventStartDate = calculateNextDate(startDate, repeatPeriod, repeatInterval, i);
+
+        // Stop if we've passed the last event date/time
+        if (lastEventDateTime && eventStartDate > lastEventDateTime) break;
+
         const eventEndDate = endDate ? calculateNextDate(endDate, repeatPeriod, repeatInterval, i) : null;
         const eventGuid = uuidv4();
         const eventName = `${name} #${i + 1}`;
 
         // Insert event and wait for completion
         const result = await dbRun(
-          `INSERT INTO events (guid, name, start_date, end_date, description, status, is_series_event, series_id, repeat_period, repeat_interval, total_events, create_date, update_date)
-           VALUES (?, ?, ?, ?, ?, 'scheduled', 1, ?, ?, ?, ?, ?, ?)`,
-          [eventGuid, eventName, eventStartDate, eventEndDate, description, seriesId, repeatPeriod, repeatInterval, totalEvents, now, now]
+          `INSERT INTO events (guid, name, start_date, end_date, description, status, is_series_event, series_id, repeat_period, repeat_interval, total_events, last_event_date, last_event_time, create_date, update_date)
+           VALUES (?, ?, ?, ?, ?, 'scheduled', 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [eventGuid, eventName, eventStartDate, eventEndDate, description, seriesId, repeatPeriod, repeatInterval, totalEvents, lastEventDate, lastEventTime, now, now]
         );
 
         const eventId = result.lastID;
@@ -1551,7 +1646,7 @@ app.post('/api/events', async (req, res) => {
       // All events created and xrefs linked - now safe to respond
       res.status(201).json({
         series_id: seriesId,
-        total_events: totalEvents,
+        total_events: createdEvents.length,
         events: createdEvents
       });
     } else {

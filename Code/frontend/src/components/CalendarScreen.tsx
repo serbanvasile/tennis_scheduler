@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { databaseService } from '../database/sqlite-service';
 import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
+import { commonStyles } from '../ui/commonStyles';
 import { TennisEvent, Venue, System } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -38,7 +39,9 @@ interface EventFormState {
   isSeriesEvent: boolean;
   repeatPeriod: 'hours' | 'days' | 'weeks';
   repeatInterval: number;
-  totalEvents: number;
+  totalEvents?: number; // Optional if lastEventDate provided
+  lastEventDate?: string; // Optional end boundary for series
+  lastEventTime?: string; // Time component for last event
 }
 
 const defaultFormState: EventFormState = {
@@ -128,6 +131,34 @@ const TimeInput = ({ value, onChange, style, theme }: { value: string; onChange:
   );
 };
 
+// Tab Component
+const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: string) => void }) => {
+  const { theme } = useTheme();
+  return (
+    <View style={commonStyles.tabContainer}>
+      <TouchableOpacity
+        style={[commonStyles.tab, activeTab === 'General' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        onPress={() => onChange('General')}
+      >
+        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>General</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[commonStyles.tab, activeTab === 'Venues' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        onPress={() => onChange('Venues')}
+      >
+        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>Venues</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[commonStyles.tab, activeTab === 'Participants' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        onPress={() => onChange('Participants')}
+      >
+        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>Participants</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+
 export default function CalendarScreen() {
   const [events, setEvents] = useState<TennisEvent[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -138,9 +169,20 @@ export default function CalendarScreen() {
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [formState, setFormState] = useState<EventFormState>(defaultFormState);
 
+  // Preview configuration
+  const [previewFirstCount, setPreviewFirstCount] = useState(4);
+  const [previewLastCount, setPreviewLastCount] = useState(4);
+
   // Confirmation modal for delete all
   const [confirmVisible, setConfirmVisible] = useState(false);
-  const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, isDestructive: false });
+  const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, onCancel: () => { }, isDestructive: false, confirmLabel: undefined as string | undefined, cancelLabel: undefined as string | undefined });
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Active Tab for Event Form
+  const [activeTab, setActiveTab] = useState('General');
+
 
   // Court selection - available courts based on selected venues
   const [availableCourts, setAvailableCourts] = useState<any[]>([]);
@@ -164,12 +206,13 @@ export default function CalendarScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [eventsData, venuesData, lookups, teamsData, membersData] = await Promise.all([
+      const [eventsData, venuesData, lookups, teamsData, membersData, prefs] = await Promise.all([
         databaseService.getAllEvents(),
         databaseService.getVenues(),
         databaseService.getLookups(),
         databaseService.getTeams(),
-        databaseService.getMembers()
+        databaseService.getMembers(),
+        databaseService.getPreferences()
       ]);
       setEvents(eventsData);
       setVenues(venuesData);
@@ -178,6 +221,10 @@ export default function CalendarScreen() {
       if (lookups) {
         setEventTypes(lookups.eventTypes || []);
         setSystems(lookups.systems || []);
+      }
+      if (prefs) {
+        setPreviewFirstCount(prefs.preview_first_count || 4);
+        setPreviewLastCount(prefs.preview_last_count || 4);
       }
     } catch (err) {
       console.error('Failed to load calendar data:', err);
@@ -212,6 +259,17 @@ export default function CalendarScreen() {
     loadCourts();
   }, [formState.venueIds]);
 
+  // Save preferences when they change
+  React.useEffect(() => {
+    const savePrefs = async () => {
+      await databaseService.updatePreferences(previewFirstCount, previewLastCount);
+    };
+    // Only save if values have been loaded (not initial render)
+    if (previewFirstCount !== 4 || previewLastCount !== 4) {
+      savePrefs();
+    }
+  }, [previewFirstCount, previewLastCount]);
+
   const handleAddStart = () => {
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
@@ -220,6 +278,7 @@ export default function CalendarScreen() {
       startDate: dateStr
     });
     setEditingEventId(null);
+    setActiveTab('General');
     setShowModal(true);
   };
 
@@ -276,6 +335,7 @@ export default function CalendarScreen() {
     }
 
     setEditingEventId(event.event_id);
+    setActiveTab('General');
     setShowModal(true);
   };
 
@@ -286,7 +346,10 @@ export default function CalendarScreen() {
     if (!formState.startTime) return false;
     if (formState.isSeriesEvent) {
       if (!formState.repeatInterval || formState.repeatInterval < 1) return false;
-      if (!formState.totalEvents || formState.totalEvents < 2) return false;
+      // If last event date/time provided, totalEvents is optional
+      if (!formState.lastEventDate || !formState.lastEventTime) {
+        if (!formState.totalEvents || formState.totalEvents < 2) return false;
+      }
     }
     return true;
   };
@@ -326,7 +389,11 @@ export default function CalendarScreen() {
           isSeriesEvent: formState.isSeriesEvent,
           repeatPeriod: formState.isSeriesEvent ? formState.repeatPeriod : undefined,
           repeatInterval: formState.isSeriesEvent ? formState.repeatInterval : undefined,
-          totalEvents: formState.isSeriesEvent ? formState.totalEvents : undefined
+          totalEvents: formState.isSeriesEvent ? formState.totalEvents : undefined,
+          lastEventDate: formState.isSeriesEvent && formState.lastEventDate && formState.lastEventTime
+            ? new Date(`${formState.lastEventDate}T${formState.lastEventTime}:00`).getTime()
+            : undefined,
+          lastEventTime: formState.isSeriesEvent ? formState.lastEventTime : undefined
         });
       }
 
@@ -343,14 +410,40 @@ export default function CalendarScreen() {
 
     const event = events.find(e => e.event_id === editingEventId);
     if (event?.is_series_event && event?.series_id) {
-      // For series, use confirmation modal with series options
+      // For series events, use two-step confirmation to give user choice
+      // Step 1: Ask if they want to delete entire series
       setConfirmConfig({
-        title: 'Delete Series Event?',
-        message: 'This event is part of a series. Delete entire series or just this one?',
+        title: 'Delete This Event?',
+        message: `This event is part of a series (${event.name}). Do you want to delete the ENTIRE series?`,
         isDestructive: true,
+        confirmLabel: 'Yes, Delete Series',
+        cancelLabel: 'No',
         onConfirm: async () => {
-          await doDeleteEvent(true); // Delete entire series
+          // User chose to delete entire series
+          await doDeleteEvent(true);
           setConfirmVisible(false);
+        },
+        onCancel: () => {
+          // User said no to deleting series, show confirmation for single event delete
+          setConfirmVisible(false);
+          // Use setTimeout to avoid modal transition issues
+          setTimeout(() => {
+            setConfirmConfig({
+              title: 'Delete This Event Only?',
+              message: `Delete only this single event from the series?`,
+              isDestructive: true,
+              confirmLabel: 'Yes, Delete Event',
+              cancelLabel: 'Cancel',
+              onConfirm: async () => {
+                await doDeleteEvent(false);
+                setConfirmVisible(false);
+              },
+              onCancel: () => {
+                setConfirmVisible(false);
+              }
+            });
+            setConfirmVisible(true);
+          }, 100);
         }
       });
       setConfirmVisible(true);
@@ -360,8 +453,13 @@ export default function CalendarScreen() {
         title: 'Delete Event?',
         message: `Delete "${event?.name}"?`,
         isDestructive: true,
+        confirmLabel: undefined,
+        cancelLabel: undefined,
         onConfirm: async () => {
           await doDeleteEvent(false);
+          setConfirmVisible(false);
+        },
+        onCancel: () => {
           setConfirmVisible(false);
         }
       });
@@ -381,14 +479,49 @@ export default function CalendarScreen() {
   };
 
   const promptDeleteAll = () => {
+    // Get filtered events based on current search
+    const filteredEvents = searchQuery
+      ? events.filter(e => {
+        const search = searchQuery.toLowerCase();
+        const name = (e.name || '').toLowerCase();
+        const description = (e.description || '').toLowerCase();
+        const venueNames = (e.venue_names || '').toLowerCase();
+        const eventTypeNames = (e.event_type_names || '').toLowerCase();
+        const systemNames = (e.system_names || '').toLowerCase();
+        return name.includes(search) || description.includes(search) || venueNames.includes(search) || eventTypeNames.includes(search) || systemNames.includes(search);
+      })
+      : events;
+
+    const isFiltered = searchQuery.trim() !== '';
     setConfirmConfig({
-      title: 'Delete All Events?',
-      message: 'This will permanently remove ALL events. This cannot be undone.',
+      title: isFiltered ? `Delete ${filteredEvents.length} Filtered Event${filteredEvents.length !== 1 ? 's' : ''}?` : 'Delete All Events?',
+      message: isFiltered
+        ? `This will permanently delete the ${filteredEvents.length} event(s) that match your current search filter "${searchQuery}". Other events will not be affected. This cannot be undone.`
+        : 'This will permanently remove ALL events from the database. This action cannot be undone.',
       isDestructive: true,
+      confirmLabel: undefined,
+      cancelLabel: undefined,
       onConfirm: async () => {
-        await databaseService.deleteAllEvents();
+        try {
+          if (isFiltered) {
+            // Delete each filtered event individually
+            for (const event of filteredEvents) {
+              await databaseService.deleteEvent(event.event_id, false);
+            }
+          } else {
+            // Delete all events
+            await databaseService.deleteAllEvents();
+          }
+          setConfirmVisible(false);
+          loadData();
+        } catch (e: any) {
+          console.error('Delete events error:', e);
+          Alert.alert('Error', e?.message || 'Failed to delete events');
+          setConfirmVisible(false);
+        }
+      },
+      onCancel: () => {
         setConfirmVisible(false);
-        loadData();
       }
     });
     setConfirmVisible(true);
@@ -398,16 +531,29 @@ export default function CalendarScreen() {
     return arr.includes(item) ? arr.filter(x => x !== item) : [...arr, item];
   };
 
-  // Generate preview dates for series with rich formatting
-  const getSeriesPreviewDates = (): { dayOfWeek: string; dateStr: string; timeStr: string; fullDate: Date }[] => {
-    if (!formState.isSeriesEvent || !formState.startDate) return [];
+  // Generate preview dates for series with rich formatting and first/last split
+  const getSeriesPreviewDates = (): {
+    first: { dayOfWeek: string; dateStr: string; timeStr: string; fullDate: Date }[];
+    last: { dayOfWeek: string; dateStr: string; timeStr: string; fullDate: Date }[];
+    total: number;
+  } => {
+    if (!formState.isSeriesEvent || !formState.startDate) return { first: [], last: [], total: 0 };
 
     const dates: { dayOfWeek: string; dateStr: string; timeStr: string; fullDate: Date }[] = [];
     const baseDate = new Date(`${formState.startDate}T${formState.startTime || '09:00'}:00`);
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    for (let i = 0; i < Math.min(formState.totalEvents, 10); i++) {
+    // Calculate end boundary if provided
+    const lastEventDateTime = formState.lastEventDate && formState.lastEventTime
+      ? new Date(`${formState.lastEventDate}T${formState.lastEventTime}:00`)
+      : null;
+
+    // Generate all dates
+    let i = 0;
+    const maxIterations = formState.totalEvents || 1000; // Fallback limit
+
+    while (i < maxIterations) {
       let nextDate = new Date(baseDate);
       switch (formState.repeatPeriod) {
         case 'hours':
@@ -420,14 +566,28 @@ export default function CalendarScreen() {
           nextDate.setDate(nextDate.getDate() + (i * formState.repeatInterval * 7));
           break;
       }
+
+      // Stop if we've passed the last event date/time
+      if (lastEventDateTime && nextDate > lastEventDateTime) break;
+
       dates.push({
         dayOfWeek: dayNames[nextDate.getDay()],
         dateStr: `${monthNames[nextDate.getMonth()]} ${nextDate.getDate()}, ${nextDate.getFullYear()}`,
         timeStr: nextDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         fullDate: nextDate
       });
+
+      i++;
     }
-    return dates;
+
+    // Split into first/last
+    const total = dates.length;
+    const first = dates.slice(0, Math.min(previewFirstCount, total));
+    const last = total > previewFirstCount + previewLastCount
+      ? dates.slice(-previewLastCount)
+      : [];
+
+    return { first, last, total };
   };
 
   const renderEventCard = ({ item }: { item: TennisEvent }) => (
@@ -438,8 +598,10 @@ export default function CalendarScreen() {
       <View style={styles.cardHeader}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>{item.name}</Text>
-          {item.is_series_event && (
-            <Text style={[styles.seriesBadge, { color: theme.colors.muted }]}>Series Event</Text>
+          {!!item.is_series_event && (
+            <View style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginTop: 4 }}>
+              <Text style={{ color: theme.colors.primary, fontSize: 11, fontWeight: '600' }}>SERIES</Text>
+            </View>
           )}
         </View>
         <Text style={[styles.cardDate, { color: theme.colors.text }]}>
@@ -465,562 +627,669 @@ export default function CalendarScreen() {
 
   const renderForm = () => (
     <ScrollView style={styles.formScroll}>
-      {/* Section 1: Single or Series */}
-      <View style={[styles.section, { borderBottomColor: theme.colors.border }, editingEventId ? { opacity: 0.5 } : undefined]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>1. Event Type</Text>
-        <Text style={[styles.helpText, { color: theme.colors.muted }]}>
-          {editingEventId ? 'Event type cannot be changed when editing' : 'Create a single event or a recurring series'}
-        </Text>
-        <View style={styles.modeSelector}>
-          <TouchableOpacity
-            style={[
-              styles.modeButton,
-              { borderColor: theme.colors.border },
-              !formState.isSeriesEvent && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-            ]}
-            onPress={() => !editingEventId && setFormState(prev => ({ ...prev, isSeriesEvent: false }))}
-            disabled={!!editingEventId}
-          >
-            <Text style={[
-              styles.modeButtonText,
-              { color: theme.colors.text },
-              !formState.isSeriesEvent && { color: 'black', fontWeight: 'bold' }
-            ]}>Single Event</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.modeButton,
-              { borderColor: theme.colors.border },
-              formState.isSeriesEvent && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-            ]}
-            onPress={() => !editingEventId && setFormState(prev => ({ ...prev, isSeriesEvent: true }))}
-            disabled={!!editingEventId}
-          >
-            <Text style={[
-              styles.modeButtonText,
-              { color: theme.colors.text },
-              formState.isSeriesEvent && { color: 'black', fontWeight: 'bold' }
-            ]}>Event Series</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Section 2: Event Details */}
-      <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>2. Event Details</Text>
-
-        <Text style={[styles.labelFirst, { color: theme.colors.text }]}>Event Name</Text>
-        <TextInput
-          style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
-          value={formState.name}
-          onChangeText={t => setFormState(prev => ({ ...prev, name: t }))}
-          placeholder={formState.isSeriesEvent ? "e.g. Weekly Round Robin" : "e.g. Saturday Doubles"}
-          placeholderTextColor={theme.colors.muted}
-        />
-
-        <Text style={[styles.label, { color: theme.colors.text }]}>Event Category</Text>
-        <View style={styles.chipContainer}>
-          {eventTypes.map(et => (
-            <TouchableOpacity
-              key={et.eventType_id}
-              style={[
-                styles.chip,
-                { borderColor: theme.colors.border },
-                formState.eventTypeIds.includes(et.eventType_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-              ]}
-              onPress={() => setFormState(prev => ({
-                ...prev,
-                eventTypeIds: prev.eventTypeIds.includes(et.eventType_id) ? [] : [et.eventType_id]
-              }))}
-            >
-              <Text style={[
-                styles.chipText,
-                { color: theme.colors.text },
-                formState.eventTypeIds.includes(et.eventType_id) && { color: 'black', fontWeight: 'bold' }
-              ]}>{et.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={[styles.label, { color: theme.colors.text }]}>System Type</Text>
-        <View style={styles.chipContainer}>
-          {systems.map(s => (
-            <TouchableOpacity
-              key={s.system_id}
-              style={[
-                styles.chip,
-                { borderColor: theme.colors.border },
-                formState.systemIds.includes(s.system_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-              ]}
-              onPress={() => setFormState(prev => ({
-                ...prev,
-                systemIds: prev.systemIds.includes(s.system_id) ? [] : [s.system_id]
-              }))}
-            >
-              <Text style={[
-                styles.chipText,
-                { color: theme.colors.text },
-                formState.systemIds.includes(s.system_id) && { color: 'black', fontWeight: 'bold' }
-              ]}>{s.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Section 3: Date & Time */}
-      <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>3. Date & Time</Text>
-
-        <View style={styles.row}>
-          <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={[styles.labelFirst, { color: theme.colors.text }]}>
-              {formState.isSeriesEvent ? 'First Event Date' : 'Date'}
+      {/* General Tab */}
+      {activeTab === 'General' && (
+        <>
+          {/* Event Type */}
+          <View style={[styles.section, { borderBottomColor: theme.colors.border }, editingEventId ? { opacity: 0.5 } : undefined]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Event Type</Text>
+            <Text style={[styles.helpText, { color: theme.colors.muted }]}>
+              {editingEventId ? 'Event type cannot be changed when editing' : 'Create a single event or a recurring series'}
             </Text>
-            <DateInput
-              value={formState.startDate}
-              onChange={t => setFormState(prev => ({ ...prev, startDate: t }))}
-              theme={theme}
-            />
+            <View style={styles.modeSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.modeButton,
+                  { borderColor: theme.colors.border },
+                  !formState.isSeriesEvent && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                ]}
+                onPress={() => !editingEventId && setFormState(prev => ({ ...prev, isSeriesEvent: false }))}
+                disabled={!!editingEventId}
+              >
+                <Text style={[
+                  styles.modeButtonText,
+                  { color: theme.colors.text },
+                  !formState.isSeriesEvent && { color: 'black', fontWeight: 'bold' }
+                ]}>Single Event</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeButton,
+                  { borderColor: theme.colors.border },
+                  formState.isSeriesEvent && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                ]}
+                onPress={() => !editingEventId && setFormState(prev => ({ ...prev, isSeriesEvent: true }))}
+                disabled={!!editingEventId}
+              >
+                <Text style={[
+                  styles.modeButtonText,
+                  { color: theme.colors.text },
+                  formState.isSeriesEvent && { color: 'black', fontWeight: 'bold' }
+                ]}>Event Series</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={[styles.labelFirst, { color: theme.colors.text }]}>Time</Text>
-            <TimeInput
-              value={formState.startTime}
-              onChange={t => setFormState(prev => ({ ...prev, startTime: t }))}
-              theme={theme}
-            />
-          </View>
-        </View>
-      </View>
 
-      {/* Section 4: Series Options (conditional) */}
-      {formState.isSeriesEvent && (
-        <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>4. Series Options</Text>
+          {/* Event Details */}
+          <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Event Details</Text>
 
-          <Text style={[styles.labelFirst, { color: theme.colors.text }]}>Repeat Every</Text>
-          <View style={styles.row}>
+            <Text style={[styles.labelFirst, { color: theme.colors.text }]}>Event Name</Text>
             <TextInput
-              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, width: 60, marginRight: 8, textAlign: 'center' }]}
-              value={formState.repeatInterval.toString()}
-              onChangeText={t => setFormState(prev => ({ ...prev, repeatInterval: parseInt(t) || 1 }))}
-              keyboardType="numeric"
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground }]}
+              value={formState.name}
+              onChangeText={t => setFormState(prev => ({ ...prev, name: t }))}
+              placeholder={formState.isSeriesEvent ? "e.g. Weekly Round Robin" : "e.g. Saturday Doubles"}
+              placeholderTextColor={theme.colors.muted}
             />
-            <View style={[styles.chipContainer, { flex: 1 }]}>
-              {(['hours', 'days', 'weeks'] as const).map(period => (
+
+            <Text style={[styles.label, { color: theme.colors.text }]}>Event Category</Text>
+            <View style={styles.chipContainer}>
+              {eventTypes.map(et => (
                 <TouchableOpacity
-                  key={period}
+                  key={et.eventType_id}
                   style={[
                     styles.chip,
                     { borderColor: theme.colors.border },
-                    formState.repeatPeriod === period && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                    formState.eventTypeIds.includes(et.eventType_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                   ]}
-                  onPress={() => setFormState(prev => ({ ...prev, repeatPeriod: period }))}
+                  onPress={() => setFormState(prev => ({
+                    ...prev,
+                    eventTypeIds: prev.eventTypeIds.includes(et.eventType_id) ? [] : [et.eventType_id]
+                  }))}
                 >
                   <Text style={[
                     styles.chipText,
-                    { color: theme.colors.text, textTransform: 'capitalize' },
-                    formState.repeatPeriod === period && { color: 'black', fontWeight: 'bold' }
-                  ]}>{period}</Text>
+                    { color: theme.colors.text },
+                    formState.eventTypeIds.includes(et.eventType_id) && { color: 'black', fontWeight: 'bold' }
+                  ]}>{et.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: theme.colors.text }]}>System Type</Text>
+            <View style={styles.chipContainer}>
+              {systems.map(s => (
+                <TouchableOpacity
+                  key={s.system_id}
+                  style={[
+                    styles.chip,
+                    { borderColor: theme.colors.border },
+                    formState.systemIds.includes(s.system_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  ]}
+                  onPress={() => setFormState(prev => ({
+                    ...prev,
+                    systemIds: prev.systemIds.includes(s.system_id) ? [] : [s.system_id]
+                  }))}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: theme.colors.text },
+                    formState.systemIds.includes(s.system_id) && { color: 'black', fontWeight: 'bold' }
+                  ]}>{s.name}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
-          <Text style={[styles.label, { color: theme.colors.text, marginTop: 12 }]}>Total Events</Text>
-          <TextInput
-            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, width: 80 }]}
-            value={formState.totalEvents.toString()}
-            onChangeText={t => setFormState(prev => ({ ...prev, totalEvents: parseInt(t) || 1 }))}
-            keyboardType="numeric"
-          />
+          {/* Date & Time */}
+          <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Date & Time</Text>
 
-          {/* Preview */}
-          <Text style={[styles.label, { color: theme.colors.text, marginTop: 16 }]}>Preview (first {Math.min(formState.totalEvents, 10)} events)</Text>
-          <View style={[styles.previewContainer, { borderColor: theme.colors.border }]}>
-            {getSeriesPreviewDates().map((date, idx) => (
-              <View key={idx} style={styles.previewRow}>
-                <View style={[styles.previewEventNum, { backgroundColor: theme.colors.primary }]}>
-                  <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>#{idx + 1}</Text>
-                </View>
-                <View style={styles.previewDayCol}>
-                  <Text style={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 14 }}>{date.dayOfWeek}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.colors.text, fontSize: 14 }}>{date.dateStr}</Text>
-                </View>
-                <View style={styles.previewTimeCol}>
-                  <Text style={{ color: theme.colors.muted, fontSize: 13 }}>🕐 {date.timeStr}</Text>
-                </View>
+            <View style={styles.row}>
+              <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={[styles.labelFirst, { color: theme.colors.text }]}>
+                  {formState.isSeriesEvent ? 'First Event Date' : 'Date'}
+                </Text>
+                <DateInput
+                  value={formState.startDate}
+                  onChange={t => setFormState(prev => ({ ...prev, startDate: t }))}
+                  theme={theme}
+                />
               </View>
-            ))}
-            {formState.totalEvents > 10 && (
-              <Text style={[styles.previewMore, { color: theme.colors.muted }]}>
-                ...and {formState.totalEvents - 10} more events
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
-
-      {/* Section 5: Venues */}
-      <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-          {formState.isSeriesEvent ? '5' : '4'}. Venues
-        </Text>
-        <View style={styles.chipContainer}>
-          {venues.map(v => (
-            <TouchableOpacity
-              key={v.venue_id}
-              style={[
-                styles.chip,
-                { borderColor: theme.colors.border },
-                formState.venueIds.includes(v.venue_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-              ]}
-              onPress={() => setFormState(prev => ({ ...prev, venueIds: toggleArrayItem(prev.venueIds, v.venue_id) }))}
-            >
-              <Text style={[
-                styles.chipText,
-                { color: theme.colors.text },
-                formState.venueIds.includes(v.venue_id) && { color: 'black', fontWeight: 'bold' }
-              ]}>{v.name}</Text>
-            </TouchableOpacity>
-          ))}
-          {venues.length === 0 && (
-            <Text style={{ color: theme.colors.muted }}>No venues available</Text>
-          )}
-        </View>
-      </View>
-
-      {/* Section 6: Courts (if venues selected) */}
-      {formState.venueIds.length > 0 && availableCourts.length > 0 && (
-        <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            {formState.isSeriesEvent ? '6' : '5'}. Courts ({availableCourts.length} available)
-          </Text>
-
-          <View style={styles.modeSelector}>
-            <TouchableOpacity
-              style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'all' && { backgroundColor: theme.colors.primary }]}
-              onPress={() => {
-                setCourtSelectionMode('all');
-                setFormState(prev => ({ ...prev, courtIds: availableCourts.map(c => c.court_id) }));
-              }}
-            >
-              <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'all' && { color: 'black' }]}>All Courts</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'count' && { backgroundColor: theme.colors.primary }]}
-              onPress={() => setCourtSelectionMode('count')}
-            >
-              <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'count' && { color: 'black' }]}>Number</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'select' && { backgroundColor: theme.colors.primary }]}
-              onPress={() => {
-                setCourtSelectionMode('select');
-                setFormState(prev => ({ ...prev, courtIds: [] })); // Clear for manual selection
-              }}
-            >
-              <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'select' && { color: 'black' }]}>Select</Text>
-            </TouchableOpacity>
+              <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={[styles.labelFirst, { color: theme.colors.text }]}>Time</Text>
+                <TimeInput
+                  value={formState.startTime}
+                  onChange={t => setFormState(prev => ({ ...prev, startTime: t }))}
+                  theme={theme}
+                />
+              </View>
+            </View>
           </View>
 
-          {/* Count mode */}
-          {courtSelectionMode === 'count' && (
-            <View style={{ marginTop: 12 }}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>How many courts? (max {availableCourts.length})</Text>
+          {/* Section 4: Series Options (conditional) */}
+          {formState.isSeriesEvent && (
+            <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Series Options</Text>
+
+              <Text style={[styles.labelFirst, { color: theme.colors.text }]}>Repeat Every</Text>
               <View style={styles.row}>
                 <TextInput
-                  style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, width: 80, textAlign: 'center' }]}
-                  value={courtCount}
-                  onChangeText={text => {
-                    setCourtCount(text);
-                    const count = Math.min(parseInt(text) || 0, availableCourts.length);
-                    setFormState(prev => ({ ...prev, courtIds: availableCourts.slice(0, count).map(c => c.court_id) }));
+                  style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, width: 60, marginRight: 8, textAlign: 'center' }]}
+                  value={formState.repeatInterval.toString()}
+                  onChangeText={t => setFormState(prev => ({ ...prev, repeatInterval: parseInt(t) || 1 }))}
+                  keyboardType="numeric"
+                />
+                <View style={[styles.chipContainer, { flex: 1 }]}>
+                  {(['hours', 'days', 'weeks'] as const).map(period => (
+                    <TouchableOpacity
+                      key={period}
+                      style={[
+                        styles.chip,
+                        { borderColor: theme.colors.border },
+                        formState.repeatPeriod === period && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                      ]}
+                      onPress={() => setFormState(prev => ({ ...prev, repeatPeriod: period }))}
+                    >
+                      <Text style={[
+                        styles.chipText,
+                        { color: theme.colors.text, textTransform: 'capitalize' },
+                        formState.repeatPeriod === period && { color: 'black', fontWeight: 'bold' }
+                      ]}>{period}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <Text style={[styles.label, { color: theme.colors.text, marginTop: 12 }]}>Total Events {formState.lastEventDate ? '(Optional)' : ''}</Text>
+              <TextInput
+                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, width: 80 }]}
+                value={formState.totalEvents?.toString() || ''}
+                onChangeText={t => setFormState(prev => ({ ...prev, totalEvents: parseInt(t) || undefined }))}
+                keyboardType="numeric"
+                placeholder={formState.lastEventDate ? "Optional" : "Required"}
+                placeholderTextColor={theme.colors.muted}
+              />
+              <Text style={{ color: theme.colors.muted, fontSize: 12, marginTop: 4 }}>
+                {formState.lastEventDate ? 'Leave empty to generate until Last Event Date/Time' : 'Minimum 2 events required'}
+              </Text>
+
+              {/* Last Event Date/Time */}
+              <View style={styles.row}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={[styles.label, { color: theme.colors.text, marginTop: 16 }]}>Last Event Date</Text>
+                  <DateInput
+                    value={formState.lastEventDate || ''}
+                    onChange={t => setFormState(prev => ({ ...prev, lastEventDate: t }))}
+                    theme={theme}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[styles.label, { color: theme.colors.text, marginTop: 16 }]}>Last Event Time</Text>
+                  <TimeInput
+                    value={formState.lastEventTime || ''}
+                    onChange={t => setFormState(prev => ({ ...prev, lastEventTime: t }))}
+                    theme={theme}
+                  />
+                </View>
+              </View>
+              <Text style={{ color: theme.colors.muted, fontSize: 12, marginTop: 4 }}>
+                If provided, series will not generate events beyond this date/time
+              </Text>
+
+              {/* Preview Configuration */}
+              <Text style={[styles.label, { color: theme.colors.text, marginTop: 16 }]}>Preview Configuration</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                <Text style={{ color: theme.colors.text, fontSize: 14 }}>Show First:</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, width: 50, textAlign: 'center', padding: 8 }]}
+                  value={previewFirstCount.toString()}
+                  onChangeText={t => {
+                    const num = parseInt(t) || 0;
+                    if (num >= 0 && num <= 20) setPreviewFirstCount(num);
                   }}
                   keyboardType="numeric"
                 />
-                <Text style={{ color: theme.colors.muted, marginLeft: 12, alignSelf: 'center' }}>
-                  Using: {formState.courtIds.length} courts
-                </Text>
+                <Text style={{ color: theme.colors.text, fontSize: 14, marginLeft: 4 }}>Last:</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, width: 50, textAlign: 'center', padding: 8 }]}
+                  value={previewLastCount.toString()}
+                  onChangeText={t => {
+                    const num = parseInt(t) || 0;
+                    if (num >= 0 && num <= 20) setPreviewLastCount(num);
+                  }}
+                  keyboardType="numeric"
+                />
               </View>
+
+              {/* Preview */}
+              {(() => {
+                const preview = getSeriesPreviewDates();
+                return (
+                  <>
+                    <Text style={[styles.label, { color: theme.colors.text, marginTop: 16 }]}>
+                      Event Preview ({preview.total} event{preview.total !== 1 ? 's' : ''} total)
+                    </Text>
+                    <View style={[styles.previewContainer, { borderColor: theme.colors.border }]}>
+                      {preview.first.map((date: any, idx: number) => (
+                        <View key={idx} style={styles.previewRow}>
+                          <View style={[styles.previewEventNum, { backgroundColor: theme.colors.primary }]}>
+                            <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>#{idx + 1}</Text>
+                          </View>
+                          <View style={styles.previewDayCol}>
+                            <Text style={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 14 }}>{date.dayOfWeek}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: theme.colors.text, fontSize: 14 }}>{date.dateStr}</Text>
+                          </View>
+                          <View style={styles.previewTimeCol}>
+                            <Text style={{ color: theme.colors.muted, fontSize: 13 }}>🕐 {date.timeStr}</Text>
+                          </View>
+                        </View>
+                      ))}
+                      {preview.last.length > 0 && (
+                        <>
+                          <Text style={{ color: theme.colors.muted, textAlign: 'center', marginVertical: 8, fontSize: 13 }}>
+                            ... {preview.total - preview.first.length - preview.last.length} more event{preview.total - preview.first.length - preview.last.length !== 1 ? 's' : ''} ...
+                          </Text>
+                          {preview.last.map((date: any, idx: number) => (
+                            <View key={`last-${idx}`} style={styles.previewRow}>
+                              <View style={[styles.previewEventNum, { backgroundColor: theme.colors.primary }]}>
+                                <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>
+                                  #{preview.total - preview.last.length + idx + 1}
+                                </Text>
+                              </View>
+                              <View style={styles.previewDayCol}>
+                                <Text style={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 14 }}>{date.dayOfWeek}</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ color: theme.colors.text, fontSize: 14 }}>{date.dateStr}</Text>
+                              </View>
+                              <View style={styles.previewTimeCol}>
+                                <Text style={{ color: theme.colors.muted, fontSize: 13 }}>🕐 {date.timeStr}</Text>
+                              </View>
+                            </View>
+                          ))}
+                        </>
+                      )}
+                    </View>
+                  </>
+                );
+              })()}
             </View>
           )}
-
-          {/* Select mode */}
-          {courtSelectionMode === 'select' && (
-            <View style={{ marginTop: 12 }}>
-              <View style={styles.chipContainer}>
-                {availableCourts.map(c => (
-                  <TouchableOpacity
-                    key={c.court_id}
-                    style={[
-                      styles.chip,
-                      { borderColor: theme.colors.border },
-                      formState.courtIds.includes(c.court_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                    ]}
-                    onPress={() => setFormState(prev => ({ ...prev, courtIds: toggleArrayItem(prev.courtIds, c.court_id) }))}
-                  >
-                    <Text style={[
-                      styles.chipText,
-                      { color: theme.colors.text },
-                      formState.courtIds.includes(c.court_id) && { color: 'black', fontWeight: 'bold' }
-                    ]}>{c.name}{c.venueName ? ` (${c.venueName})` : ''}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={{ color: theme.colors.muted, marginTop: 8, fontSize: 13 }}>
-                Selected: {formState.courtIds.length} of {availableCourts.length}
-              </Text>
-            </View>
-          )}
-
-          {courtSelectionMode === 'all' && (
-            <Text style={{ color: theme.colors.muted, marginTop: 8, fontSize: 13 }}>
-              All {availableCourts.length} courts selected
-            </Text>
-          )}
-        </View>
+        </>
       )}
 
-      {/* Section 6/7: Teams */}
-      <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-          {formState.isSeriesEvent ? '6' : availableCourts.length > 0 ? '6' : '5'}. Teams
-        </Text>
-
-        {/* Team Search with Show All button */}
-        <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-          <TextInput
-            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1, marginRight: 8 }]}
-            value={teamSearchQuery}
-            onChangeText={setTeamSearchQuery}
-            placeholder="Search teams... (use * for wildcard)"
-            placeholderTextColor={theme.colors.muted}
-          />
-          <TouchableOpacity
-            style={[styles.chip, { borderColor: theme.colors.border, paddingHorizontal: 12 }]}
-            onPress={() => setTeamSearchQuery('*')}
-          >
-            <Text style={[styles.chipText, { color: theme.colors.text }]}>Show All</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Teams List */}
-        {teamSearchQuery.trim() && (
-          <View style={styles.chipContainer}>
-            {teams
-              .filter(t => {
-                const search = teamSearchQuery.toLowerCase();
-
-                // Wildcard support
-                if (search === '*') return true;
-                if (search.startsWith('*') && search.endsWith('*')) {
-                  const term = search.slice(1, -1);
-                  return t.name.toLowerCase().includes(term) || (t.sport_name || '').toLowerCase().includes(term);
-                }
-                if (search.startsWith('*')) {
-                  const term = search.slice(1);
-                  return t.name.toLowerCase().endsWith(term) || (t.sport_name || '').toLowerCase().endsWith(term);
-                }
-                if (search.endsWith('*')) {
-                  const term = search.slice(0, -1);
-                  return t.name.toLowerCase().startsWith(term) || (t.sport_name || '').toLowerCase().startsWith(term);
-                }
-
-                // Regular search
-                const name = t.name.toLowerCase();
-                const sport = (t.sport_name || '').toLowerCase();
-                return name.includes(search) || sport.includes(search);
-              })
-              .map(team => (
+      {/* Venues Tab */}
+      {activeTab === 'Venues' && (
+        <>
+          {/* Venues */}
+          <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Venues
+            </Text>
+            <View style={styles.chipContainer}>
+              {venues.map(v => (
                 <TouchableOpacity
-                  key={team.team_id}
+                  key={v.venue_id}
                   style={[
                     styles.chip,
                     { borderColor: theme.colors.border },
-                    formState.teamIds.includes(team.team_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                    formState.venueIds.includes(v.venue_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                   ]}
-                  onPress={() => {
-                    if (formState.teamIds.includes(team.team_id)) {
-                      // Removing team - check for confirmation if editing existing event
-                      const handleRemove = () => {
-                        const teamMembers = members.filter(m =>
-                          (m as any).teams?.some((t: any) => t.team_id === team.team_id)
-                        ).map(m => m.member_id);
-                        setFormState(prev => ({
-                          ...prev,
-                          teamIds: prev.teamIds.filter(id => id !== team.team_id),
-                          memberIds: prev.memberIds.filter(mid => !teamMembers.includes(mid))
-                        }));
-                      };
+                  onPress={() => setFormState(prev => ({ ...prev, venueIds: toggleArrayItem(prev.venueIds, v.venue_id) }))}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: theme.colors.text },
+                    formState.venueIds.includes(v.venue_id) && { color: 'black', fontWeight: 'bold' }
+                  ]}>{v.name}</Text>
+                </TouchableOpacity>
+              ))}
+              {venues.length === 0 && (
+                <Text style={{ color: theme.colors.muted }}>No venues available</Text>
+              )}
+            </View>
+          </View>
 
-                      if (editingEventId) {
-                        const associatedMembers = formState.memberIds.filter(mid => {
-                          const member = members.find(m => m.member_id === mid);
-                          return (member as any).teams?.some((t: any) => t.team_id === team.team_id);
-                        });
-                        if (associatedMembers.length > 0) {
-                          setConfirmConfig({
-                            title: `Remove ${team.name}?`,
-                            message: `This will also remove ${associatedMembers.length} member(s) from this team. Continue?`,
-                            isDestructive: true,
-                            onConfirm: () => {
+          {/* Courts (if venues selected) */}
+          {formState.venueIds.length > 0 && availableCourts.length > 0 && (
+            <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Courts ({availableCourts.length} available)
+              </Text>
+
+              <View style={styles.modeSelector}>
+                <TouchableOpacity
+                  style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'all' && { backgroundColor: theme.colors.primary }]}
+                  onPress={() => {
+                    setCourtSelectionMode('all');
+                    setFormState(prev => ({ ...prev, courtIds: availableCourts.map(c => c.court_id) }));
+                  }}
+                >
+                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'all' && { color: 'black' }]}>All Courts</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'count' && { backgroundColor: theme.colors.primary }]}
+                  onPress={() => setCourtSelectionMode('count')}
+                >
+                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'count' && { color: 'black' }]}>Number</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'select' && { backgroundColor: theme.colors.primary }]}
+                  onPress={() => {
+                    setCourtSelectionMode('select');
+                    setFormState(prev => ({ ...prev, courtIds: [] })); // Clear for manual selection
+                  }}
+                >
+                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'select' && { color: 'black' }]}>Select</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Count mode */}
+              {courtSelectionMode === 'count' && (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={[styles.label, { color: theme.colors.text }]}>How many courts? (max {availableCourts.length})</Text>
+                  <View style={styles.row}>
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, width: 80, textAlign: 'center' }]}
+                      value={courtCount}
+                      onChangeText={text => {
+                        setCourtCount(text);
+                        const count = Math.min(parseInt(text) || 0, availableCourts.length);
+                        setFormState(prev => ({ ...prev, courtIds: availableCourts.slice(0, count).map(c => c.court_id) }));
+                      }}
+                      keyboardType="numeric"
+                    />
+                    <Text style={{ color: theme.colors.muted, marginLeft: 12, alignSelf: 'center' }}>
+                      Using: {formState.courtIds.length} courts
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Select mode */}
+              {courtSelectionMode === 'select' && (
+                <View style={{ marginTop: 12 }}>
+                  <View style={styles.chipContainer}>
+                    {availableCourts.map(c => (
+                      <TouchableOpacity
+                        key={c.court_id}
+                        style={[
+                          styles.chip,
+                          { borderColor: theme.colors.border },
+                          formState.courtIds.includes(c.court_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                        ]}
+                        onPress={() => setFormState(prev => ({ ...prev, courtIds: toggleArrayItem(prev.courtIds, c.court_id) }))}
+                      >
+                        <Text style={[
+                          styles.chipText,
+                          { color: theme.colors.text },
+                          formState.courtIds.includes(c.court_id) && { color: 'black', fontWeight: 'bold' }
+                        ]}>{c.name}{c.venueName ? ` (${c.venueName})` : ''}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={{ color: theme.colors.muted, marginTop: 8, fontSize: 13 }}>
+                    Selected: {formState.courtIds.length} of {availableCourts.length}
+                  </Text>
+                </View>
+              )}
+
+              {courtSelectionMode === 'all' && (
+                <Text style={{ color: theme.colors.muted, marginTop: 8, fontSize: 13 }}>
+                  All {availableCourts.length} courts selected
+                </Text>
+              )}
+            </View>
+          )}
+        </>
+      )}
+
+      {/* Participants Tab */}
+      {activeTab === 'Participants' && (
+        <>
+          {/* Teams */}
+          <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Teams
+            </Text>
+
+            {/* Team Search with Show All button */}
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              <TextInput
+                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1, marginRight: 8 }]}
+                value={teamSearchQuery}
+                onChangeText={setTeamSearchQuery}
+                placeholder="Search teams... (use * for wildcard)"
+                placeholderTextColor={theme.colors.muted}
+              />
+              <TouchableOpacity
+                style={[styles.chip, { borderColor: theme.colors.border, paddingHorizontal: 12 }]}
+                onPress={() => setTeamSearchQuery('*')}
+              >
+                <Text style={[styles.chipText, { color: theme.colors.text }]}>Show All</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Teams List */}
+            {teamSearchQuery.trim() && (
+              <View style={styles.chipContainer}>
+                {teams
+                  .filter(t => {
+                    const search = teamSearchQuery.toLowerCase();
+
+                    // Wildcard support
+                    if (search === '*') return true;
+                    if (search.startsWith('*') && search.endsWith('*')) {
+                      const term = search.slice(1, -1);
+                      return t.name.toLowerCase().includes(term) || (t.sport_name || '').toLowerCase().includes(term);
+                    }
+                    if (search.startsWith('*')) {
+                      const term = search.slice(1);
+                      return t.name.toLowerCase().endsWith(term) || (t.sport_name || '').toLowerCase().endsWith(term);
+                    }
+                    if (search.endsWith('*')) {
+                      const term = search.slice(0, -1);
+                      return t.name.toLowerCase().startsWith(term) || (t.sport_name || '').toLowerCase().startsWith(term);
+                    }
+
+                    // Regular search
+                    const name = t.name.toLowerCase();
+                    const sport = (t.sport_name || '').toLowerCase();
+                    return name.includes(search) || sport.includes(search);
+                  })
+                  .map(team => (
+                    <TouchableOpacity
+                      key={team.team_id}
+                      style={[
+                        styles.chip,
+                        { borderColor: theme.colors.border },
+                        formState.teamIds.includes(team.team_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                      ]}
+                      onPress={() => {
+                        if (formState.teamIds.includes(team.team_id)) {
+                          // Removing team - check for confirmation if editing existing event
+                          const handleRemove = () => {
+                            const teamMembers = members.filter(m =>
+                              (m as any).teams?.some((t: any) => t.team_id === team.team_id)
+                            ).map(m => m.member_id);
+                            setFormState(prev => ({
+                              ...prev,
+                              teamIds: prev.teamIds.filter(id => id !== team.team_id),
+                              memberIds: prev.memberIds.filter(mid => !teamMembers.includes(mid))
+                            }));
+                          };
+
+                          if (editingEventId) {
+                            const associatedMembers = formState.memberIds.filter(mid => {
+                              const member = members.find(m => m.member_id === mid);
+                              return (member as any).teams?.some((t: any) => t.team_id === team.team_id);
+                            });
+                            if (associatedMembers.length > 0) {
+                              setConfirmConfig({
+                                title: `Remove ${team.name}?`,
+                                message: `This will also remove ${associatedMembers.length} member(s) from this team. Continue?`,
+                                isDestructive: true,
+                                confirmLabel: undefined,
+                                cancelLabel: undefined,
+                                onConfirm: () => {
+                                  handleRemove();
+                                  setConfirmVisible(false);
+                                },
+                                onCancel: () => {
+                                  setConfirmVisible(false);
+                                }
+                              });
+                              setConfirmVisible(true);
+                            } else {
                               handleRemove();
-                              setConfirmVisible(false);
                             }
-                          });
-                          setConfirmVisible(true);
-                        } else {
-                          handleRemove();
-                        }
-                      } else {
-                        handleRemove();
-                      }
-                    } else {
-                      // Adding team
-                      setFormState(prev => ({ ...prev, teamIds: [...prev.teamIds, team.team_id] }));
-                    }
-                  }}
-                >
-                  <Text style={[
-                    styles.chipText,
-                    { color: theme.colors.text },
-                    formState.teamIds.includes(team.team_id) && { color: 'black', fontWeight: 'bold' }
-                  ]}>
-                    {team.name} {team.sport_name ? `(${team.sport_name})` : ''}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-          </View>
-        )}
-      </View>
-
-      {/* Section 7/8: Members (only if teams selected) */}
-      {formState.teamIds.length > 0 && (
-        <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            {formState.isSeriesEvent ? '7' : availableCourts.length > 0 ? '7' : '6'}. Members
-          </Text>
-
-          {/* Member Search with Show All button */}
-          <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-            <TextInput
-              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1, marginRight: 8 }]}
-              value={memberSearchQuery}
-              onChangeText={setMemberSearchQuery}
-              placeholder="Search members... (use * for wildcard)"
-              placeholderTextColor={theme.colors.muted}
-            />
-            <TouchableOpacity
-              style={[styles.chip, { borderColor: theme.colors.border, paddingHorizontal: 12 }]}
-              onPress={() => setMemberSearchQuery('*')}
-            >
-              <Text style={[styles.chipText, { color: theme.colors.text }]}>Show All</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Members List */}
-          <View style={styles.chipContainer}>
-            {members
-              .filter(m => {
-                if (!memberSearchQuery.trim()) return false; // Show nothing until search
-
-                // Only show members from selected teams
-                const memberTeams = (m as any).teams || [];
-                const isInSelectedTeam = formState.teamIds.some(teamId =>
-                  memberTeams.some((t: any) => t.team_id === teamId)
-                );
-                if (!isInSelectedTeam) return false;
-
-                const search = memberSearchQuery.toLowerCase();
-                const name = `${m.first_name} ${m.last_name}`.toLowerCase();
-
-                // Get role and position from teams matching selected teams
-                const memberTeamsInEvent = (m as any).teams?.filter((t: any) =>
-                  formState.teamIds.includes(t.team_id)
-                ) || [];
-                const roles = memberTeamsInEvent.map((t: any) => t.role_names || '').join(' ').toLowerCase();
-                const positions = memberTeamsInEvent.map((t: any) => t.position_names || '').join(' ').toLowerCase();
-                const searchableText = `${name} ${roles} ${positions}`;
-
-                // Wildcard support
-                if (search === '*') return true;
-                if (search.startsWith('*') && search.endsWith('*')) {
-                  const term = search.slice(1, -1);
-                  return searchableText.includes(term);
-                }
-                if (search.startsWith('*')) {
-                  const term = search.slice(1);
-                  return searchableText.endsWith(term);
-                }
-                if (search.endsWith('*')) {
-                  const term = search.slice(0, -1);
-                  return searchableText.startsWith(term);
-                }
-
-                // Regular search
-                return searchableText.includes(search);
-              })
-              .map(member => (
-                <TouchableOpacity
-                  key={member.member_id}
-                  style={[
-                    styles.chip,
-                    { borderColor: theme.colors.border },
-                    formState.memberIds.includes(member.member_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                  ]}
-                  onPress={() => {
-                    if (formState.memberIds.includes(member.member_id)) {
-                      // Remove member
-                      const handleRemove = () => {
-                        setFormState(prev => ({
-                          ...prev,
-                          memberIds: prev.memberIds.filter(id => id !== member.member_id)
-                        }));
-                      };
-
-                      if (editingEventId) {
-                        setConfirmConfig({
-                          title: 'Remove Member?',
-                          message: `Remove ${member.first_name} ${member.last_name} from this event?`,
-                          isDestructive: true,
-                          onConfirm: () => {
+                          } else {
                             handleRemove();
-                            setConfirmVisible(false);
                           }
-                        });
-                        setConfirmVisible(true);
-                      } else {
-                        handleRemove();
-                      }
-                    } else {
-                      // Add member
-                      setFormState(prev => ({ ...prev, memberIds: [...prev.memberIds, member.member_id] }));
-                    }
-                  }}
-                >
-                  <Text style={[
-                    styles.chipText,
-                    { color: theme.colors.text },
-                    formState.memberIds.includes(member.member_id) && { color: 'black', fontWeight: 'bold' }
-                  ]}>
-                    {member.first_name} {member.last_name}
-                    {(() => {
-                      const memberTeamsInEvent = (member as any).teams?.filter((t: any) =>
-                        formState.teamIds.includes(t.team_id)
-                      ) || [];
-                      const roles = memberTeamsInEvent.map((t: any) => t.role_names).filter(Boolean).join(', ');
-                      const positions = memberTeamsInEvent.map((t: any) => t.position_names).filter(Boolean).join(', ');
-                      const details = [roles, positions].filter(Boolean).join(' • ');
-                      return details ? ` (${details})` : '';
-                    })()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                        } else {
+                          // Adding team
+                          setFormState(prev => ({ ...prev, teamIds: [...prev.teamIds, team.team_id] }));
+                        }
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          { color: theme.colors.text },
+                          formState.teamIds.includes(team.team_id) && { color: 'black', fontWeight: 'bold' }
+                        ]}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >
+                        {team.name} {team.sport_name ? `(${team.sport_name})` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+              </View>
+            )}
           </View>
-        </View>
+
+          {/* Members (only if teams selected) */}
+          {formState.teamIds.length > 0 && (
+            <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Members
+              </Text>
+
+              {/* Member Search with Show All button */}
+              <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                <TextInput
+                  style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1, marginRight: 8 }]}
+                  value={memberSearchQuery}
+                  onChangeText={setMemberSearchQuery}
+                  placeholder="Search members... (use * for wildcard)"
+                  placeholderTextColor={theme.colors.muted}
+                />
+                <TouchableOpacity
+                  style={[styles.chip, { borderColor: theme.colors.border, paddingHorizontal: 12 }]}
+                  onPress={() => setMemberSearchQuery('*')}
+                >
+                  <Text style={[styles.chipText, { color: theme.colors.text }]}>Show All</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Members List */}
+              <View style={styles.chipContainer}>
+                {members
+                  .filter(m => {
+                    if (!memberSearchQuery.trim()) return false; // Show nothing until search
+
+                    // Only show members from selected teams
+                    const memberTeams = (m as any).teams || [];
+                    const isInSelectedTeam = formState.teamIds.some(teamId =>
+                      memberTeams.some((t: any) => t.team_id === teamId)
+                    );
+                    if (!isInSelectedTeam) return false;
+
+                    const search = memberSearchQuery.toLowerCase();
+                    const name = `${m.first_name} ${m.last_name}`.toLowerCase();
+
+                    // Get role and position from teams matching selected teams
+                    const memberTeamsInEvent = (m as any).teams?.filter((t: any) =>
+                      formState.teamIds.includes(t.team_id)
+                    ) || [];
+                    const roles = memberTeamsInEvent.map((t: any) => t.role_names || '').join(' ').toLowerCase();
+                    const positions = memberTeamsInEvent.map((t: any) => t.position_names || '').join(' ').toLowerCase();
+                    const searchableText = `${name} ${roles} ${positions}`;
+
+                    // Wildcard support
+                    if (search === '*') return true;
+                    if (search.startsWith('*') && search.endsWith('*')) {
+                      const term = search.slice(1, -1);
+                      return searchableText.includes(term);
+                    }
+                    if (search.startsWith('*')) {
+                      const term = search.slice(1);
+                      return searchableText.endsWith(term);
+                    }
+                    if (search.endsWith('*')) {
+                      const term = search.slice(0, -1);
+                      return searchableText.startsWith(term);
+                    }
+
+                    // Regular search
+                    return searchableText.includes(search);
+                  })
+                  .map(member => (
+                    <TouchableOpacity
+                      key={member.member_id}
+                      style={[
+                        styles.chip,
+                        { borderColor: theme.colors.border },
+                        formState.memberIds.includes(member.member_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                      ]}
+                      onPress={() => {
+                        if (formState.memberIds.includes(member.member_id)) {
+                          // Remove member
+                          const handleRemove = () => {
+                            setFormState(prev => ({
+                              ...prev,
+                              memberIds: prev.memberIds.filter(id => id !== member.member_id)
+                            }));
+                          };
+
+                          if (editingEventId) {
+                            setConfirmConfig({
+                              title: 'Remove Member?',
+                              message: `Remove ${member.first_name} ${member.last_name} from this event?`,
+                              isDestructive: true,
+                              confirmLabel: undefined,
+                              cancelLabel: undefined,
+                              onConfirm: () => {
+                                handleRemove();
+                                setConfirmVisible(false);
+                              },
+                              onCancel: () => {
+                                setConfirmVisible(false);
+                              }
+                            });
+                            setConfirmVisible(true);
+                          } else {
+                            handleRemove();
+                          }
+                        } else {
+                          // Add member
+                          setFormState(prev => ({ ...prev, memberIds: [...prev.memberIds, member.member_id] }));
+                        }
+                      }}
+                    >
+                      <Text style={[
+                        styles.chipText,
+                        { color: theme.colors.text },
+                        formState.memberIds.includes(member.member_id) && { color: 'black', fontWeight: 'bold' }
+                      ]}>
+                        {member.first_name} {member.last_name}
+                        {(() => {
+                          const memberTeamsInEvent = (member as any).teams?.filter((t: any) =>
+                            formState.teamIds.includes(t.team_id)
+                          ) || [];
+                          const roles = memberTeamsInEvent.map((t: any) => t.role_names).filter(Boolean).join(', ');
+                          const positions = memberTeamsInEvent.map((t: any) => t.position_names).filter(Boolean).join(', ');
+                          const details = [roles, positions].filter(Boolean).join(' • ');
+                          return details ? ` (${details})` : '';
+                        })()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+              </View>
+            </View>
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -1032,10 +1301,22 @@ export default function CalendarScreen() {
         rightAction={
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
-              <Text style={styles.buttonTextWhite}>Delete All</Text>
+              <Text style={styles.buttonTextWhite}>
+                {searchQuery
+                  ? `Delete Filtered (${events.filter(e => {
+                    const search = searchQuery.toLowerCase();
+                    const name = (e.name || '').toLowerCase();
+                    const description = (e.description || '').toLowerCase();
+                    const venueNames = (e.venue_names || '').toLowerCase();
+                    const eventTypeNames = (e.event_type_names || '').toLowerCase();
+                    const systemNames = (e.system_names || '').toLowerCase();
+                    return name.includes(search) || description.includes(search) || venueNames.includes(search) || eventTypeNames.includes(search) || systemNames.includes(search);
+                  }).length})`
+                  : `Delete All (${events.length})`}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={handleAddStart}>
-              <Text style={styles.addButtonText}>+ New Event</Text>
+              <Text style={styles.addButtonText}>New Event</Text>
             </TouchableOpacity>
           </View>
         }
@@ -1046,15 +1327,49 @@ export default function CalendarScreen() {
           <Text style={{ color: theme.colors.text }}>Loading...</Text>
         </View>
       ) : (
-        <FlatList
-          data={events}
-          keyExtractor={item => item.event_id?.toString() || Math.random().toString()}
-          renderItem={renderEventCard}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <Text style={[styles.emptyText, { color: theme.colors.muted }]}>No events found.</Text>
-          }
-        />
+        <>
+          {/* Search Input and Count */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <TextInput
+              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 8 }]}
+              placeholder="Search events..."
+              placeholderTextColor={theme.colors.muted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <Text style={{ color: theme.colors.muted, fontSize: 12, marginBottom: 8 }}>
+              {searchQuery
+                ? `Showing ${events.filter(e => {
+                  const search = searchQuery.toLowerCase();
+                  const name = (e.name || '').toLowerCase();
+                  const description = (e.description || '').toLowerCase();
+                  const venueNames = (e.venue_names || '').toLowerCase();
+                  const eventTypeNames = (e.event_type_names || '').toLowerCase();
+                  const systemNames = (e.system_names || '').toLowerCase();
+                  return name.includes(search) || description.includes(search) || venueNames.includes(search) || eventTypeNames.includes(search) || systemNames.includes(search);
+                }).length} of ${events.length} events`
+                : `${events.length} events`}
+            </Text>
+          </View>
+          <FlatList
+            data={events.filter(e => {
+              if (!searchQuery) return true;
+              const search = searchQuery.toLowerCase();
+              const name = (e.name || '').toLowerCase();
+              const description = (e.description || '').toLowerCase();
+              const venueNames = (e.venue_names || '').toLowerCase();
+              const eventTypeNames = (e.event_type_names || '').toLowerCase();
+              const systemNames = (e.system_names || '').toLowerCase();
+              return name.includes(search) || description.includes(search) || venueNames.includes(search) || eventTypeNames.includes(search) || systemNames.includes(search);
+            })}
+            keyExtractor={item => item.event_id?.toString() || Math.random().toString()}
+            renderItem={renderEventCard}
+            contentContainerStyle={styles.list}
+            ListEmptyComponent={
+              <Text style={[styles.emptyText, { color: theme.colors.muted }]}>No events found.</Text>
+            }
+          />
+        </>
       )}
 
       {/* Event Modal */}
@@ -1064,6 +1379,7 @@ export default function CalendarScreen() {
             <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>
               {editingEventId ? 'Edit Event' : 'New Event'}
             </Text>
+            <Tabs activeTab={activeTab} onChange={setActiveTab} />
             {renderForm()}
             <View style={styles.modalButtons}>
               {editingEventId && (
@@ -1085,7 +1401,13 @@ export default function CalendarScreen() {
                 disabled={!isFormValid()}
               >
                 <Text style={[styles.saveButtonText, !isFormValid() && { color: theme.colors.text }]}>
-                  {formState.isSeriesEvent ? `Create ${formState.totalEvents} Events` : (editingEventId ? 'Save' : 'Create')}
+                  {(() => {
+                    if (formState.isSeriesEvent) {
+                      const preview = getSeriesPreviewDates();
+                      return `Create ${preview.total} Event${preview.total !== 1 ? 's' : ''}`;
+                    }
+                    return editingEventId ? 'Save' : 'Create';
+                  })()}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1097,8 +1419,10 @@ export default function CalendarScreen() {
         visible={confirmVisible}
         title={confirmConfig.title}
         message={confirmConfig.message}
+        confirmLabel={confirmConfig.confirmLabel}
+        cancelLabel={confirmConfig.cancelLabel}
         onConfirm={confirmConfig.onConfirm}
-        onCancel={() => setConfirmVisible(false)}
+        onCancel={confirmConfig.onCancel}
         isDestructive={confirmConfig.isDestructive}
       />
     </SafeAreaView>
@@ -1132,17 +1456,17 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
   helpText: { fontSize: 14, marginBottom: 12 },
 
-  // Form elements
-  formGroup: { marginBottom: 12 },
+  // Form elements (use commonStyles for most, keep screen-specific ones here)
+  formGroup: commonStyles.formGroup,
   row: { flexDirection: 'row', alignItems: 'flex-end' },
-  label: { marginBottom: 6, marginTop: 12, fontWeight: '500', fontSize: 14 },
-  labelFirst: { marginBottom: 6, marginTop: 0, fontWeight: '500', fontSize: 14 },
-  input: { padding: 12, borderRadius: 8, borderWidth: 1 },
+  label: commonStyles.label,
+  labelFirst: commonStyles.labelFirst,
+  input: commonStyles.input,
 
-  // Chips
-  chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1 },
-  chipText: { fontSize: 12 },
+  // Chips (use common styles)
+  chipContainer: commonStyles.chipContainer,
+  chip: commonStyles.chip,
+  chipText: commonStyles.chipText,
 
   // Mode selector
   modeSelector: { flexDirection: 'row', gap: 12 },
@@ -1165,5 +1489,10 @@ const styles = StyleSheet.create({
   deleteButton: { padding: 12, borderRadius: 8, minWidth: 80, alignItems: 'center' },
   buttonText: { fontWeight: '600' },
   buttonTextWhite: { color: 'white', fontWeight: 'bold' },
-  saveButtonText: { color: 'black', fontWeight: 'bold' }
+  saveButtonText: { color: 'black', fontWeight: 'bold' },
+
+  // Tab styles
+  tabContainer: { flexDirection: 'row', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#ccc' },
+  tab: { paddingVertical: 10, paddingHorizontal: 20 },
+  tabText: { fontWeight: '600' }
 });

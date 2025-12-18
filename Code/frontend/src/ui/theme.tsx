@@ -13,9 +13,9 @@ if (typeof window !== 'undefined') {
 const getResponsiveWidth = () => {
   if (typeof window !== 'undefined') {
     // Use innerWidth which respects device emulation in DevTools
-    return window.innerWidth <= 768 ? '95%' : '60%';
+    return window.innerWidth <= 768 ? '95%' : '50%';
   }
-  return '60%';
+  return '50%';
 };
 export const MAX_CONTENT_WIDTH = getResponsiveWidth();
 

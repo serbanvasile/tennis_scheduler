@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { databaseService } from '../database/sqlite-service';
 import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
+import { commonStyles } from '../ui/commonStyles';
 import { Member, MemberTeam, Sport, Role, Position, Team } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -25,24 +26,24 @@ import { ImportScreen } from './ImportScreen';
 const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: string) => void }) => {
   const { theme } = useTheme();
   return (
-    <View style={styles.tabContainer}>
+    <View style={commonStyles.tabContainer}>
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'General' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        style={[commonStyles.tab, activeTab === 'General' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
         onPress={() => onChange('General')}
       >
-        <Text style={[styles.tabText, { color: theme.colors.text }]}>General</Text>
+        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>General</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'Teams' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        style={[commonStyles.tab, activeTab === 'Teams' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
         onPress={() => onChange('Teams')}
       >
-        <Text style={[styles.tabText, { color: theme.colors.text }]}>Teams & Roles</Text>
+        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>Teams & Roles</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'Contact' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        style={[commonStyles.tab, activeTab === 'Contact' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
         onPress={() => onChange('Contact')}
       >
-        <Text style={[styles.tabText, { color: theme.colors.text }]}>Contact</Text>
+        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>Contact</Text>
       </TouchableOpacity>
     </View>
   );
@@ -112,6 +113,25 @@ const ContactIcons = ({ contacts, theme }: { contacts: any[], theme: any }) => {
   );
 };
 
+// Share Type Mapping
+const SHARE_TYPE_MAP: { [key: string]: number } = {
+  'R': 0,    // Reserve
+  'OQ': 25,  // One Quarter
+  'OT': 33,  // One Third
+  'H': 50,   // Half
+  'TT': 66,  // Two Thirds
+  'TQ': 75,  // Three Quarter
+  'F': 100,  // Full
+  'C': -1    // Custom (no default)
+};
+
+const getShareTypeFromValue = (value: number): string => {
+  for (const [type, val] of Object.entries(SHARE_TYPE_MAP)) {
+    if (val === value && type !== 'C') return type;
+  }
+  return 'C'; // Custom
+};
+
 export default function RosterScreen() {
   const { theme } = useTheme();
   const [members, setMembers] = useState<Member[]>([]);
@@ -124,6 +144,7 @@ export default function RosterScreen() {
   const [allPositions, setAllPositions] = useState<Position[]>([]);
   const [allSports, setAllSports] = useState<Sport[]>([]);
   const [allSkills, setAllSkills] = useState<any[]>([]);
+  const [allContactLabels, setAllContactLabels] = useState<any[]>([]);
 
   // Edit State
   const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
@@ -138,6 +159,8 @@ export default function RosterScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [dominantSide, setDominantSide] = useState('R');
+  const [shareType, setShareType] = useState('F');
+  const [share, setShare] = useState('100');
 
   // Form State - Teams [{ teamId, roleIds[], positionIds[] }]
   const [memberTeams, setMemberTeams] = useState<any[]>([]);
@@ -155,6 +178,12 @@ export default function RosterScreen() {
 
   // Import Modal
   const [importModalVisible, setImportModalVisible] = useState(false);
+
+  // Add Member Choice Modal
+  const [addMemberChoiceVisible, setAddMemberChoiceVisible] = useState(false);
+
+  // Add Contact Modal
+  const [addContactModalVisible, setAddContactModalVisible] = useState(false);
 
   // Roster Filter
   const [rosterFilterText, setRosterFilterText] = useState('');
@@ -192,6 +221,7 @@ export default function RosterScreen() {
         setAllPositions(lookups.positions || []);
         setAllSports(lookups.sports || []);
         setAllSkills(lookups.skills || []);
+        setAllContactLabels(lookups.contact_labels || []);
       }
     } catch (e) {
       console.error(e);
@@ -216,6 +246,8 @@ export default function RosterScreen() {
       setPhone((details as any).phone || '');
       setEmail((details as any).email || '');
       setDominantSide((details as any).dominant_side || 'R');
+      setShare(((details as any).share || 0).toString());
+      setShareType((details as any).share_type || 'F');
 
       const mappedTeams = (details.teams || []).map((t: any) => ({
         teamId: t.team_id,
@@ -244,6 +276,8 @@ export default function RosterScreen() {
     setPhone('');
     setEmail('');
     setDominantSide('R');
+    setShareType('F');
+    setShare('100');
     setMemberTeams([]);
     setFilterText('');
     setMemberContacts([]);
@@ -260,7 +294,18 @@ export default function RosterScreen() {
     }
 
     try {
-      const memberData = { first_name: firstName, last_name: lastName, display_name: displayName, gender, skill: skill || '3.5', dominant_side: dominantSide, phone, email };
+      const memberData = {
+        first_name: firstName,
+        last_name: lastName,
+        display_name: displayName,
+        gender,
+        skill: skill || '3.5',
+        dominant_side: dominantSide,
+        phone,
+        email,
+        share: parseFloat(share) || 0,
+        share_type: shareType
+      };
 
       if (editingMemberId) {
         await databaseService.updateMember(editingMemberId, memberData, memberTeams, memberContacts);
@@ -423,11 +468,8 @@ export default function RosterScreen() {
                   : `Delete All (${members.length})`}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={handleImportClick}>
-              <Text style={styles.addButtonText}>+ Import</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => { resetForm(); setModalVisible(true); }}>
-              <Text style={styles.addButtonText}>+ Member</Text>
+            <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => setAddMemberChoiceVisible(true)}>
+              <Text style={styles.addButtonText}>New Member</Text>
             </TouchableOpacity>
           </View>
         }
@@ -480,7 +522,7 @@ export default function RosterScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>
-              {editingMemberId ? 'Edit Member' : 'New Member'}
+              {editingMemberId ? `Edit Member (${firstName} ${lastName})` : 'New Member'}
             </Text>
 
             <Tabs activeTab={activeTab} onChange={setActiveTab} />
@@ -534,6 +576,53 @@ export default function RosterScreen() {
                       })}
                     </View>
                   </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Share Type</Text>
+                    <View style={styles.chipContainer}>
+                      {[['R', 'OQ', 'OT', 'H'], ['TT', 'TQ', 'F', 'C']].map((row, rowIdx) => (
+                        <View key={rowIdx} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: rowIdx === 0 ? 8 : 0 }}>
+                          {row.map(type => {
+                            const isSelected = shareType === type;
+                            return (
+                              <TouchableOpacity
+                                key={type}
+                                style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                onPress={() => {
+                                  setShareType(type);
+                                  // Auto-fill share value
+                                  const defaultValue = SHARE_TYPE_MAP[type];
+                                  if (defaultValue >= 0) {
+                                    setShare(defaultValue.toString());
+                                  }
+                                }}
+                              >
+                                <Text style={{ color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Share (%)</Text>
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 80 }]}
+                      value={share}
+                      onChangeText={val => {
+                        setShare(val);
+                        // Auto-switch to Custom if value doesn't match any predefined type
+                        const numVal = parseFloat(val);
+                        if (!isNaN(numVal)) {
+                          const matchedType = getShareTypeFromValue(numVal);
+                          setShareType(matchedType);
+                        }
+                      }}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor={theme.colors.muted}
+                    />
+                  </View>
                 </>
               ) : activeTab === 'Teams' ? (
                 <View>
@@ -556,7 +645,17 @@ export default function RosterScreen() {
                           style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
                           onPress={() => toggleTeam(t.team_id)}
                         >
-                          <Text style={{ color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{t.name}</Text>
+                          <Text
+                            style={[
+                              styles.chipText,
+                              { color: isSelected ? 'black' : theme.colors.text },
+                              isSelected && { fontWeight: 'bold' }
+                            ]}
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
+                          >
+                            {t.name}
+                          </Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -571,43 +670,59 @@ export default function RosterScreen() {
                     const relevantPositions = allPositions.filter(p => !p.sport_id || p.sport_id === sportId);
 
                     return (
-                      <View key={mt.teamId} style={[styles.teamDetailCard, { borderColor: theme.colors.border }]}>
+                      <View key={mt.teamId} style={[styles.teamDetailCard, { borderColor: theme.colors.border, marginLeft: 16, marginTop: 8, borderTopWidth: 1, paddingTop: 8 }]}>
                         <Text style={[styles.teamDetailTitle, { color: theme.colors.primary }]}>{team.name} Settings</Text>
 
-                        <Text style={[styles.labelSmall, { color: theme.colors.text }]}>Roles:</Text>
+                        <Text style={[styles.label, { color: theme.colors.text }]}>Roles:</Text>
                         <View style={styles.chipContainer}>
                           {allRoles.map(r => {
                             const active = mt.roleIds.includes(r.role_id);
                             return (
                               <TouchableOpacity
                                 key={r.role_id}
-                                style={[styles.chipSmall, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
                                 onPress={() => toggleRole(mt.teamId, r.role_id)}
                               >
-                                <Text style={{ fontSize: 10, color: active ? 'black' : theme.colors.text, fontWeight: active ? 'bold' : 'normal' }}>{r.name}</Text>
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    { color: active ? 'black' : theme.colors.text },
+                                    active && { fontWeight: 'bold' }
+                                  ]}
+                                >
+                                  {r.name}
+                                </Text>
                               </TouchableOpacity>
                             )
                           })}
                         </View>
 
-                        <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Positions:</Text>
+                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Positions:</Text>
                         <View style={styles.chipContainer}>
                           {relevantPositions.map(p => {
                             const active = mt.positionIds.includes(p.position_id);
                             return (
                               <TouchableOpacity
                                 key={p.position_id}
-                                style={[styles.chipSmall, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
                                 onPress={() => togglePosition(mt.teamId, p.position_id)}
                               >
-                                <Text style={{ fontSize: 10, color: active ? 'black' : theme.colors.text, fontWeight: active ? 'bold' : 'normal' }}>{p.name}</Text>
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    { color: active ? 'black' : theme.colors.text },
+                                    active && { fontWeight: 'bold' }
+                                  ]}
+                                >
+                                  {p.name}
+                                </Text>
                               </TouchableOpacity>
                             )
                           })}
                           {relevantPositions.length === 0 && <Text style={{ fontSize: 10, color: theme.colors.muted }}>No positions for this sport.</Text>}
                         </View>
 
-                        <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Skill Level:</Text>
+                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Skill Level:</Text>
                         <View style={styles.chipContainer}>
                           {(() => {
                             // Filter skills for this team's sport
@@ -617,14 +732,22 @@ export default function RosterScreen() {
                               return (
                                 <TouchableOpacity
                                   key={s.skill_id}
-                                  style={[styles.chipSmall, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                  style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
                                   onPress={() => {
                                     setMemberTeams(prev => prev.map(t =>
                                       t.teamId === mt.teamId ? { ...t, skillId: s.skill_id } : t
                                     ));
                                   }}
                                 >
-                                  <Text style={{ fontSize: 10, color: active ? 'black' : theme.colors.text, fontWeight: active ? 'bold' : 'normal' }}>{s.name}</Text>
+                                  <Text
+                                    style={[
+                                      styles.chipText,
+                                      { color: active ? 'black' : theme.colors.text },
+                                      active && { fontWeight: 'bold' }
+                                    ]}
+                                  >
+                                    {s.name}
+                                  </Text>
                                 </TouchableOpacity>
                               );
                             });
@@ -661,61 +784,12 @@ export default function RosterScreen() {
                     <Text style={{ color: theme.colors.muted, marginBottom: 16 }}>No contacts added yet.</Text>
                   )}
 
-                  {/* Add new contact */}
-                  <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 16 }]}>Add New Contact</Text>
-
-                  <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Type:</Text>
-                  <View style={styles.chipContainer}>
-                    {['phone', 'email', 'whatsapp', 'signal', 'other'].map(type => {
-                      const isSelected = newContactType === type;
-                      return (
-                        <TouchableOpacity
-                          key={type}
-                          style={[styles.chipSmall, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                          onPress={() => setNewContactType(type)}
-                        >
-                          <Text style={{ fontSize: 10, color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Value:</Text>
-                  <TextInput
-                    style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
-                    value={newContactValue}
-                    onChangeText={setNewContactValue}
-                    placeholder={newContactType === 'email' ? 'email@example.com' : newContactType === 'phone' ? '(555) 555-5555' : 'Contact info'}
-                    placeholderTextColor={theme.colors.muted}
-                    keyboardType={newContactType === 'email' ? 'email-address' : newContactType === 'phone' ? 'phone-pad' : 'default'}
-                  />
-
-                  <Text style={[styles.labelSmall, { color: theme.colors.text, marginTop: 8 }]}>Label:</Text>
-                  <View style={styles.chipContainer}>
-                    {['preferred', 'do not use', 'expired', 'other'].map(label => {
-                      const isSelected = newContactLabel === label;
-                      return (
-                        <TouchableOpacity
-                          key={label}
-                          style={[styles.chipSmall, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                          onPress={() => setNewContactLabel(label)}
-                        >
-                          <Text style={{ fontSize: 10, color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{label}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
+                  {/* Add Contact Button */}
                   <TouchableOpacity
-                    style={[styles.saveButton, { backgroundColor: theme.colors.primary, marginTop: 12, alignSelf: 'flex-start' }]}
-                    onPress={() => {
-                      if (newContactValue.trim()) {
-                        setMemberContacts([...memberContacts, { type: newContactType, value: newContactValue.trim(), label: newContactLabel }]);
-                        setNewContactValue('');
-                      }
-                    }}
+                    style={[styles.saveButton, { backgroundColor: theme.colors.primary, alignSelf: 'flex-start' }]}
+                    onPress={() => setAddContactModalVisible(true)}
                   >
-                    <Text style={styles.buttonTextBold}>+ Add Contact</Text>
+                    <Text style={styles.buttonTextBold}>Add Contact</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -755,6 +829,145 @@ export default function RosterScreen() {
         />
       </Modal>
 
+      {/* Add Member Choice Modal */}
+      <Modal visible={addMemberChoiceVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.choiceModalContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <Text style={[styles.choiceTitle, { color: theme.colors.primary }]}>Add Members</Text>
+            <Text style={[styles.choiceMessage, { color: theme.colors.text }]}>
+              Would you like to create a single member manually or import multiple members from Excel?
+            </Text>
+            <View style={styles.choiceButtons}>
+              <TouchableOpacity
+                style={[styles.choiceButton, { backgroundColor: theme.colors.primary, flex: 1 }]}
+                onPress={() => {
+                  setAddMemberChoiceVisible(false);
+                  resetForm();
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.choiceButtonText}>Add Manually</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.choiceButton, { backgroundColor: theme.colors.primary, flex: 1 }]}
+                onPress={() => {
+                  setAddMemberChoiceVisible(false);
+                  handleImportClick();
+                }}
+              >
+                <Text style={styles.choiceButtonText}>Import Excel</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.cancelButton, { borderColor: theme.colors.muted, marginTop: 12, alignSelf: 'center' }]}
+              onPress={() => setAddMemberChoiceVisible(false)}
+            >
+              <Text style={{ color: theme.colors.text }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Contact Modal */}
+      <Modal visible={addContactModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, maxHeight: '70%' }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>
+              Add New Contact Method{editingMemberId && firstName && lastName ? ` (${firstName} ${lastName})` : ''}
+            </Text>
+
+            <ScrollView style={styles.modalContent}>
+              <Text style={[styles.label, { color: theme.colors.text }]}>Type:</Text>
+              <View style={styles.chipContainer}>
+                {['phone', 'email', 'whatsapp', 'signal', 'other'].map(type => {
+                  const isSelected = newContactType === type;
+                  return (
+                    <TouchableOpacity
+                      key={type}
+                      style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                      onPress={() => setNewContactType(type)}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          { color: isSelected ? 'black' : theme.colors.text },
+                          isSelected && { fontWeight: 'bold' }
+                        ]}
+                      >
+                        {type}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>Value:</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                  value={newContactValue}
+                  onChangeText={setNewContactValue}
+                  placeholder={newContactType === 'email' ? 'email@example.com' : newContactType === 'phone' ? '(555) 555-5555' : 'Contact info'}
+                  placeholderTextColor={theme.colors.muted}
+                  keyboardType={newContactType === 'email' ? 'email-address' : newContactType === 'phone' ? 'phone-pad' : 'default'}
+                />
+              </View>
+
+              <Text style={[styles.label, { color: theme.colors.text }]}>Label:</Text>
+              <View style={styles.chipContainer}>
+                {allContactLabels.map(label => {
+                  const isSelected = newContactLabel === label.name;
+                  return (
+                    <TouchableOpacity
+                      key={label.label_id}
+                      style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                      onPress={() => setNewContactLabel(label.name)}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          { color: isSelected ? 'black' : theme.colors.text },
+                          isSelected && { fontWeight: 'bold' }
+                        ]}
+                      >
+                        {label.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              <View style={{ flex: 1 }} />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={[styles.cancelButton, { borderColor: theme.colors.muted }]}
+                  onPress={() => {
+                    setAddContactModalVisible(false);
+                    setNewContactValue('');
+                  }}
+                >
+                  <Text style={{ color: theme.colors.text }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => {
+                    if (newContactValue.trim()) {
+                      setMemberContacts([...memberContacts, { type: newContactType, value: newContactValue.trim(), label: newContactLabel }]);
+                      setNewContactValue('');
+                      setAddContactModalVisible(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.buttonTextBold}>Add</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <ConfirmationModal
         visible={confirmVisible}
         title={confirmConfig.title}
@@ -788,22 +1001,24 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
   modalContent: { flex: 1 },
 
-  tabContainer: { flexDirection: 'row', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#ccc' },
-  tab: { paddingVertical: 10, paddingHorizontal: 20 },
-  tabText: { fontWeight: '600' },
+  // Use common styles (imported from commonStyles)
+  tabContainer: commonStyles.tabContainer,
+  tab: commonStyles.tab,
+  tabText: commonStyles.tabText,
 
   inputGroup: { marginBottom: 16 },
-  label: { marginBottom: 6, fontWeight: '500' },
-  input: { padding: 12, borderRadius: 8, borderWidth: 1 },
+  label: commonStyles.label,
+  input: commonStyles.input,
 
-  sectionHeader: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, marginTop: 10 },
-  chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1 },
-  chipSmall: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1 },
+  sectionHeader: commonStyles.sectionHeader,
+  chipContainer: commonStyles.chipContainer,
+  chip: commonStyles.chip,
+  chipText: commonStyles.chipText,
+  chipSmall: commonStyles.chipSmall,
 
   teamDetailCard: { padding: 12, borderWidth: 1, borderRadius: 8, marginBottom: 12 },
   teamDetailTitle: { fontWeight: 'bold', marginBottom: 8 },
-  labelSmall: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  labelSmall: commonStyles.labelSmall,
 
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
   cancelButton: { padding: 12, borderRadius: 8, borderWidth: 1, minWidth: 80, alignItems: 'center' },
@@ -822,5 +1037,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)'
   },
-  contactIcon: { fontSize: 18 }
+  contactIcon: { fontSize: 18 },
+
+  // Add Member Choice Modal
+  choiceModalContainer: {
+    width: '85%',
+    maxWidth: 400,
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1
+  },
+  choiceTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12
+  },
+  choiceMessage: {
+    fontSize: 13,
+    marginBottom: 16,
+    lineHeight: 18
+  },
+  choiceButtons: {
+    flexDirection: 'row',
+    gap: 10
+  },
+  choiceButton: {
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center'
+  },
+  choiceButtonText: {
+    color: 'black',
+    fontWeight: 'bold',
+    fontSize: 13
+  }
 });

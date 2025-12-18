@@ -207,9 +207,20 @@ function AppContent() {
               headerTitle: () => null,
               headerLeft: () => <DateTimeHeader />,
               headerRight: () => <ThemeToggle />,
-              tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
+              tabBarStyle: {
+                backgroundColor: theme.colors.surface,
+                borderTopColor: theme.colors.background,
+                borderTopWidth: 16,
+                height: 64,
+                elevation: 10,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 3.84,
+              },
               tabBarActiveTintColor: theme.colors.primary,
               tabBarInactiveTintColor: theme.colors.muted,
+              tabBarLabelStyle: { fontSize: 14, paddingBottom: 4 },
             }}
           >
             <Tab.Screen name="Teams" component={TeamsScreen} />
