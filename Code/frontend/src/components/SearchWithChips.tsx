@@ -134,6 +134,9 @@ export function SearchWithChips({
                             ? 'Show items matching ALL words'
                             : 'Show items matching ANY word'}
                     </Text>
+                    <Text style={[styles.wildcardHint, { color: theme.colors.muted }]}>
+                        💡 Use * for wildcards: Fri* *day F*y
+                    </Text>
                 </View>
             )}
 
@@ -273,5 +276,10 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         lineHeight: 20
+    },
+    wildcardHint: {
+        fontSize: 11,
+        marginTop: 6,
+        fontStyle: 'italic'
     }
 });

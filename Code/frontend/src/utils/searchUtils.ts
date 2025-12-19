@@ -4,24 +4,36 @@
  */
 
 /**
- * Filters an array of items based on search chips using AND or OR logic.
- * - AND mode: An item matches if ALL chips are found in its searchable text
- * - OR mode: An item matches if ANY chip is found in its searchable text
- * 
- * @param items - Array of items to filter
- * @param chips - Array of search filter chips
- * @param extractSearchableText - Function that converts an item to searchable text string
- * @param mode - Filter mode: 'AND' or 'OR' (default: 'AND')
- * @returns Filtered array of items
- * 
- * @example
- * const filteredEvents = filterItemsByChips(
- *   events,
- *   ['2025', 'Courtside'],
- *   (event) => `${event.name} ${event.venue_names} ${formatDate(event.start_date)}`,
- *   'AND'
- * );
+ * Converts a wildcard pattern to a regex pattern
+ * Supports * as wildcard (e.g., "Fri*", "*day", "*ur*")
  */
+function wildcardToRegex(pattern: string): RegExp {
+    // Escape special regex characters except *
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    // Replace * with .*
+    const regexPattern = escaped.replace(/\*/g, '.*');
+    // Match anywhere in the string (case insensitive) - no anchors!
+    return new RegExp(regexPattern, 'i');
+}
+
+/**
+ * Check if a chip matches the searchable text
+ * Supports wildcard patterns with *
+ */
+function chipMatches(chip: string, searchableText: string): boolean {
+    const trimmedChip = chip.trim();
+
+    // Check if chip contains wildcard
+    if (trimmedChip.includes('*')) {
+        const regex = wildcardToRegex(trimmedChip);
+        // Match the pattern anywhere in the searchable text (field value)
+        return regex.test(searchableText);
+    }
+
+    // Plain text search (case insensitive)
+    return searchableText.includes(trimmedChip.toLowerCase());
+}
+
 export function filterItemsByChips<T>(
     items: T[],
     chips: string[],
@@ -39,16 +51,10 @@ export function filterItemsByChips<T>(
 
         if (mode === 'AND') {
             // AND logic: return true if ALL chips match
-            return chips.every((chip) => {
-                const normalizedChip = chip.toLowerCase().trim();
-                return normalizedChip && searchableText.includes(normalizedChip);
-            });
+            return chips.every((chip) => chipMatches(chip, searchableText));
         } else {
             // OR logic: return true if ANY chip matches
-            return chips.some((chip) => {
-                const normalizedChip = chip.toLowerCase().trim();
-                return normalizedChip && searchableText.includes(normalizedChip);
-            });
+            return chips.some((chip) => chipMatches(chip, searchableText));
         }
     });
 }
