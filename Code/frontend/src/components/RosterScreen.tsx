@@ -21,6 +21,8 @@ import { Member, MemberTeam, Sport, Role, Position, Team } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
 import { ImportScreen } from './ImportScreen';
+import { SearchWithChips } from './SearchWithChips';
+import { filterItemsByChips } from '../utils/searchUtils';
 
 // Tab Component
 const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: string) => void }) => {
@@ -186,7 +188,8 @@ export default function RosterScreen() {
   const [addContactModalVisible, setAddContactModalVisible] = useState(false);
 
   // Roster Filter
-  const [rosterFilterText, setRosterFilterText] = useState('');
+  const [searchChips, setSearchChips] = useState<string[]>([]);
+  const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('AND');
 
   const handleImportClick = () => {
     if (allTeams.length === 0) {
@@ -338,23 +341,25 @@ export default function RosterScreen() {
 
   const promptDeleteAll = () => {
     // Get filtered members based on current search
-    const filteredMembers = rosterFilterText
-      ? members.filter(m => {
-        const search = rosterFilterText.toLowerCase();
-        const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
-        const displayN = (m.display_name || '').toLowerCase();
-        const teamsStr = (m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ').toLowerCase() || '';
-        const phoneStr = ((m as any).phone || '').toLowerCase();
-        const emailStr = ((m as any).email || '').toLowerCase();
-        return fullName.includes(search) || displayN.includes(search) || teamsStr.includes(search) || phoneStr.includes(search) || emailStr.includes(search);
-      })
-      : members;
+    const filteredMembers = filterItemsByChips(
+      members,
+      searchChips,
+      (member) => {
+        const fullName = `${member.first_name} ${member.last_name}`;
+        const displayN = member.display_name || '';
+        const teamsStr = (member as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ') || '';
+        const phoneStr = (member as any).phone || '';
+        const emailStr = (member as any).email || '';
+        return `${fullName} ${displayN} ${teamsStr} ${phoneStr} ${emailStr}`;
+      },
+      searchMode
+    );
 
-    const isFiltered = rosterFilterText.trim() !== '';
+    const isFiltered = searchChips.length > 0;
     setConfirmConfig({
       title: isFiltered ? `Delete ${filteredMembers.length} Filtered Member${filteredMembers.length !== 1 ? 's' : ''}?` : 'Delete All Members?',
       message: isFiltered
-        ? `This will permanently delete the ${filteredMembers.length} member(s) that match your current search filter "${rosterFilterText}". Other members will not be affected. This cannot be undone.`
+        ? `This will permanently delete the ${filteredMembers.length} member(s) that match your current search filters (${searchChips.join(', ')}). Other members will not be affected. This cannot be undone.`
         : 'This will permanently remove ALL members from the database. This cannot be undone.',
       isDestructive: true,
       onConfirm: async () => {
@@ -455,16 +460,13 @@ export default function RosterScreen() {
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
               <Text style={styles.buttonTextWhite}>
-                {rosterFilterText
-                  ? `Delete Filtered (${members.filter(m => {
-                    const search = rosterFilterText.toLowerCase();
-                    const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
-                    const displayN = (m.display_name || '').toLowerCase();
-                    const teamsStr = (m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ').toLowerCase() || '';
-                    const phoneStr = ((m as any).phone || '').toLowerCase();
-                    const emailStr = ((m as any).email || '').toLowerCase();
-                    return fullName.includes(search) || displayN.includes(search) || teamsStr.includes(search) || phoneStr.includes(search) || emailStr.includes(search);
-                  }).length})`
+                {searchChips.length > 0
+                  ? `Delete Filtered (${filterItemsByChips(
+                    members,
+                    searchChips,
+                    (m) => `${m.first_name} ${m.last_name} ${m.display_name || ''} ${(m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ') || ''} ${(m as any).phone || ''} ${(m as any).email || ''}`,
+                    searchMode
+                  ).length})`
                   : `Delete All (${members.length})`}
               </Text>
             </TouchableOpacity>
@@ -477,40 +479,28 @@ export default function RosterScreen() {
 
       {loading ? <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} /> : (
         <>
-          {/* Filter and Count */}
-          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-            <TextInput
-              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 8 }]}
-              placeholder="Search members..."
-              placeholderTextColor={theme.colors.muted}
-              value={rosterFilterText}
-              onChangeText={setRosterFilterText}
-            />
-            <Text style={{ color: theme.colors.muted, fontSize: 12, marginBottom: 8 }}>
-              {rosterFilterText
-                ? `Showing ${members.filter(m => {
-                  const search = rosterFilterText.toLowerCase();
-                  const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
-                  const displayN = (m.display_name || '').toLowerCase();
-                  const teamsStr = (m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ').toLowerCase() || '';
-                  const phoneStr = ((m as any).phone || '').toLowerCase();
-                  const emailStr = ((m as any).email || '').toLowerCase();
-                  return fullName.includes(search) || displayN.includes(search) || teamsStr.includes(search) || phoneStr.includes(search) || emailStr.includes(search);
-                }).length} of ${members.length} members`
-                : `${members.length} members`}
-            </Text>
-          </View>
+          {/* Search with Chips */}
+          <SearchWithChips
+            chips={searchChips}
+            onChipsChange={setSearchChips}
+            mode={searchMode}
+            onModeChange={setSearchMode}
+            placeholder="Type and press ENTER to add filter..."
+            resultCount={filterItemsByChips(
+              members,
+              searchChips,
+              (m) => `${m.first_name} ${m.last_name} ${m.display_name || ''} ${(m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ') || ''} ${(m as any).phone || ''} ${(m as any).email || ''}`,
+              searchMode
+            ).length}
+            totalCount={members.length}
+          />
           <FlatList
-            data={members.filter(m => {
-              if (!rosterFilterText) return true;
-              const search = rosterFilterText.toLowerCase();
-              const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
-              const displayN = (m.display_name || '').toLowerCase();
-              const teamsStr = (m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ').toLowerCase() || '';
-              const phoneStr = ((m as any).phone || '').toLowerCase();
-              const emailStr = ((m as any).email || '').toLowerCase();
-              return fullName.includes(search) || displayN.includes(search) || teamsStr.includes(search) || phoneStr.includes(search) || emailStr.includes(search);
-            })}
+            data={filterItemsByChips(
+              members,
+              searchChips,
+              (m) => `${m.first_name} ${m.last_name} ${m.display_name || ''} ${(m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ') || ''} ${(m as any).phone || ''} ${(m as any).email || ''}`,
+              searchMode
+            )}
             keyExtractor={m => m.member_id.toString()}
             renderItem={renderMemberCard}
             contentContainerStyle={styles.list}

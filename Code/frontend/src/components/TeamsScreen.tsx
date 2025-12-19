@@ -19,6 +19,8 @@ import { Team, Color, Sport } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
 import { RemoteImage } from './RemoteImage';
+import { SearchWithChips } from './SearchWithChips';
+import { filterItemsByChips } from '../utils/searchUtils';
 
 export default function TeamsScreen() {
     const { theme } = useTheme();
@@ -47,7 +49,8 @@ export default function TeamsScreen() {
     });
 
     // Search State
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchChips, setSearchChips] = useState<string[]>([]);
+    const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('AND');
 
     useFocusEffect(
         useCallback(() => {
@@ -180,21 +183,18 @@ export default function TeamsScreen() {
 
     const promptDeleteAll = () => {
         // Get filtered teams based on current search
-        const filteredTeams = searchQuery
-            ? teams.filter(t => {
-                const search = searchQuery.toLowerCase();
-                const name = t.name.toLowerCase();
-                const sport = (t.sport_name || '').toLowerCase();
-                const colors = (t.team_colors || '').toLowerCase();
-                return name.includes(search) || sport.includes(search) || colors.includes(search);
-            })
-            : teams;
+        const filteredTeams = filterItemsByChips(
+            teams,
+            searchChips,
+            (team) => `${team.name} ${team.sport_name || ''} ${team.team_colors || ''}`,
+            searchMode
+        );
 
-        const isFiltered = searchQuery.trim() !== '';
+        const isFiltered = searchChips.length > 0;
         setConfirmConfig({
             title: isFiltered ? `Delete ${filteredTeams.length} Filtered Team${filteredTeams.length !== 1 ? 's' : ''}?` : 'Delete All Teams?',
             message: isFiltered
-                ? `This will permanently delete the ${filteredTeams.length} team(s) that match your current search filter "${searchQuery}". Other teams will not be affected. This cannot be undone.`
+                ? `This will permanently delete the ${filteredTeams.length} team(s) that match your current search filters (${searchChips.join(', ')}). Other teams will not be affected. This cannot be undone.`
                 : 'This will permanently remove ALL teams from the database. This action cannot be undone.',
             isDestructive: true,
             onConfirm: async () => {
@@ -264,14 +264,13 @@ export default function TeamsScreen() {
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                         <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
                             <Text style={styles.buttonTextWhite}>
-                                {searchQuery
-                                    ? `Delete Filtered (${teams.filter(t => {
-                                        const search = searchQuery.toLowerCase();
-                                        const name = t.name.toLowerCase();
-                                        const sport = (t.sport_name || '').toLowerCase();
-                                        const colors = (t.team_colors || '').toLowerCase();
-                                        return name.includes(search) || sport.includes(search) || colors.includes(search);
-                                    }).length})`
+                                {searchChips.length > 0
+                                    ? `Delete Filtered (${filterItemsByChips(
+                                        teams,
+                                        searchChips,
+                                        (t) => `${t.name} ${t.sport_name || ''} ${t.team_colors || ''}`,
+                                        searchMode
+                                    ).length})`
                                     : `Delete All (${teams.length})`}
                             </Text>
                         </TouchableOpacity>
@@ -286,36 +285,28 @@ export default function TeamsScreen() {
                 <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} />
             ) : (
                 <>
-                    {/* Search Input and Count */}
-                    <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-                        <TextInput
-                            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 8 }]}
-                            placeholder="Search teams..."
-                            placeholderTextColor={theme.colors.muted}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                        <Text style={{ color: theme.colors.muted, fontSize: 12, marginBottom: 8 }}>
-                            {searchQuery
-                                ? `Showing ${teams.filter(t => {
-                                    const search = searchQuery.toLowerCase();
-                                    const name = t.name.toLowerCase();
-                                    const sport = (t.sport_name || '').toLowerCase();
-                                    const colors = (t.team_colors || '').toLowerCase();
-                                    return name.includes(search) || sport.includes(search) || colors.includes(search);
-                                }).length} of ${teams.length} teams`
-                                : `${teams.length} teams`}
-                        </Text>
-                    </View>
+                    {/* Search with Chips */}
+                    <SearchWithChips
+                        chips={searchChips}
+                        onChipsChange={setSearchChips}
+                        mode={searchMode}
+                        onModeChange={setSearchMode}
+                        placeholder="Type and press ENTER to add filter..."
+                        resultCount={filterItemsByChips(
+                            teams,
+                            searchChips,
+                            (t) => `${t.name} ${t.sport_name || ''} ${t.team_colors || ''}`,
+                            searchMode
+                        ).length}
+                        totalCount={teams.length}
+                    />
                     <FlatList
-                        data={teams.filter(t => {
-                            if (!searchQuery) return true;
-                            const search = searchQuery.toLowerCase();
-                            const name = t.name.toLowerCase();
-                            const sport = (t.sport_name || '').toLowerCase();
-                            const colors = (t.team_colors || '').toLowerCase();
-                            return name.includes(search) || sport.includes(search) || colors.includes(search);
-                        })}
+                        data={filterItemsByChips(
+                            teams,
+                            searchChips,
+                            (t) => `${t.name} ${t.sport_name || ''} ${t.team_colors || ''}`,
+                            searchMode
+                        )}
                         keyExtractor={t => t.team_id.toString()}
                         renderItem={renderTeamCard}
                         contentContainerStyle={styles.list}

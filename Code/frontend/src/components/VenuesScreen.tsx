@@ -19,6 +19,8 @@ import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
 import { Venue } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
+import { SearchWithChips } from './SearchWithChips';
+import { filterItemsByChips } from '../utils/searchUtils';
 import { GeocodingService, GeocodingResult } from '../services/geocoding-service';
 
 interface Court {
@@ -115,7 +117,8 @@ export default function VenuesScreen() {
     const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, isDestructive: false });
 
     // Venue List Search State (different from GPS searchQuery in venue modal)
-    const [venueFilterText, setVenueFilterText] = useState('');
+    const [searchChips, setSearchChips] = useState<string[]>([]);
+    const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('AND');
 
     // Expanded venue tracking
     const [expandedVenueId, setExpandedVenueId] = useState<number | null>(null);
@@ -223,25 +226,25 @@ export default function VenuesScreen() {
         setConfirmVisible(true);
     };
 
-    const promptDeleteAllVenues = () => {
+    const promptDeleteAll = () => {
         // Get filtered venues based on current search
-        const filteredVenues = venueFilterText
-            ? venues.filter(v => {
-                const search = venueFilterText.toLowerCase();
-                const name = v.name.toLowerCase();
-                const address = (v.address || '').toLowerCase();
-                const courts = v.courts.map(c => c.name).join(' ').toLowerCase();
-                const fields = v.fields.map(f => f.name).join(' ').toLowerCase();
-                return name.includes(search) || address.includes(search) || courts.includes(search) || fields.includes(search);
-            })
-            : venues;
+        const filteredVenues = filterItemsByChips(
+            venues,
+            searchChips,
+            (venue) => {
+                const courts = venue.courts?.map(c => c.name).join(' ') || '';
+                const fields = venue.fields?.map(f => f.name).join(' ') || '';
+                return `${venue.name} ${venue.address} ${courts} ${fields}`;
+            },
+            searchMode
+        );
 
-        const isFiltered = venueFilterText.trim() !== '';
+        const isFiltered = searchChips.length > 0;
         setConfirmConfig({
             title: isFiltered ? `Delete ${filteredVenues.length} Filtered Venue${filteredVenues.length !== 1 ? 's' : ''}?` : 'Delete All Venues?',
             message: isFiltered
-                ? `This will permanently delete the ${filteredVenues.length} venue(s) that match your current search filter "${venueFilterText}", including all associated courts and fields. Other venues will not be affected. This cannot be undone.`
-                : 'This will permanently delete ALL venues and their associated courts and fields. This cannot be undone.',
+                ? `This will permanently delete the ${filteredVenues.length} venue(s) that match your current search filters (${searchChips.join(', ')}), including all associated courts and fields. Other venues will not be affected. This cannot be undone.`
+                : 'This will permanently remove ALL venues from the database, including all associated courts and fields. This action cannot be undone.',
             isDestructive: true,
             onConfirm: async () => {
                 try {
@@ -251,9 +254,9 @@ export default function VenuesScreen() {
                     }
                     setConfirmVisible(false);
                     loadData();
-                } catch (e) {
+                } catch (e: any) {
                     console.error('Delete venues error:', e);
-                    Alert.alert('Error', 'Failed to delete venues');
+                    Alert.alert('Error', e?.message || 'Failed to delete venues');
                     setConfirmVisible(false);
                 }
             }
@@ -571,17 +574,15 @@ export default function VenuesScreen() {
                 title="Venues"
                 rightAction={
                     <View style={{ flexDirection: 'row', gap: 10 }}>
-                        <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAllVenues}>
+                        <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
                             <Text style={styles.buttonTextWhite}>
-                                {venueFilterText
-                                    ? `Delete Filtered (${venues.filter(v => {
-                                        const search = venueFilterText.toLowerCase();
-                                        const name = v.name.toLowerCase();
-                                        const address = (v.address || '').toLowerCase();
-                                        const courts = v.courts.map(c => c.name).join(' ').toLowerCase();
-                                        const fields = v.fields.map(f => f.name).join(' ').toLowerCase();
-                                        return name.includes(search) || address.includes(search) || courts.includes(search) || fields.includes(search);
-                                    }).length})`
+                                {searchChips.length > 0
+                                    ? `Delete Filtered (${filterItemsByChips(
+                                        venues,
+                                        searchChips,
+                                        (v) => `${v.name} ${v.address || ''} ${v.courts?.map(c => c.name).join(' ') || ''} ${v.fields?.map(f => f.name).join(' ') || ''}`,
+                                        searchMode
+                                    ).length})`
                                     : `Delete All (${venues.length})`}
                             </Text>
                         </TouchableOpacity>
@@ -596,38 +597,28 @@ export default function VenuesScreen() {
                 <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} />
             ) : (
                 <>
-                    {/* Search Input and Count */}
-                    <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-                        <TextInput
-                            style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 8 }]}
-                            placeholder="Search venues..."
-                            placeholderTextColor={theme.colors.muted}
-                            value={venueFilterText}
-                            onChangeText={setVenueFilterText}
-                        />
-                        <Text style={{ color: theme.colors.muted, fontSize: 12, marginBottom: 8 }}>
-                            {venueFilterText
-                                ? `Showing ${venues.filter(v => {
-                                    const search = venueFilterText.toLowerCase();
-                                    const name = v.name.toLowerCase();
-                                    const address = (v.address || '').toLowerCase();
-                                    const courts = v.courts.map(c => c.name).join(' ').toLowerCase();
-                                    const fields = v.fields.map(f => f.name).join(' ').toLowerCase();
-                                    return name.includes(search) || address.includes(search) || courts.includes(search) || fields.includes(search);
-                                }).length} of ${venues.length} venues`
-                                : `${venues.length} venues`}
-                        </Text>
-                    </View>
+                    {/* Search with Chips */}
+                    <SearchWithChips
+                        chips={searchChips}
+                        onChipsChange={setSearchChips}
+                        mode={searchMode}
+                        onModeChange={setSearchMode}
+                        placeholder="Type and press ENTER to add filter..."
+                        resultCount={filterItemsByChips(
+                            venues,
+                            searchChips,
+                            (v) => `${v.name} ${v.address || ''} ${v.courts?.map(c => c.name).join(' ') || ''} ${v.fields?.map(f => f.name).join(' ') || ''}`,
+                            searchMode
+                        ).length}
+                        totalCount={venues.length}
+                    />
                     <FlatList
-                        data={venues.filter(v => {
-                            if (!venueFilterText) return true;
-                            const search = venueFilterText.toLowerCase();
-                            const name = v.name.toLowerCase();
-                            const address = (v.address || '').toLowerCase();
-                            const courts = v.courts.map(c => c.name).join(' ').toLowerCase();
-                            const fields = v.fields.map(f => f.name).join(' ').toLowerCase();
-                            return name.includes(search) || address.includes(search) || courts.includes(search) || fields.includes(search);
-                        })}
+                        data={filterItemsByChips(
+                            venues,
+                            searchChips,
+                            (v) => `${v.name} ${v.address || ''} ${v.courts?.map(c => c.name).join(' ') || ''} ${v.fields?.map(f => f.name).join(' ') || ''}`,
+                            searchMode
+                        )}
                         keyExtractor={item => item.venue_id.toString()}
                         renderItem={renderVenueCard}
                         contentContainerStyle={styles.list}

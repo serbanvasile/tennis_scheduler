@@ -19,6 +19,8 @@ import { commonStyles } from '../ui/commonStyles';
 import { TennisEvent, Venue, System } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
+import { SearchWithChips } from './SearchWithChips';
+import { filterItemsByChips, formatDateForSearch, formatTimeForSearch } from '../utils/searchUtils';
 
 // Form state interface for event creation/editing
 interface EventFormState {
@@ -178,7 +180,8 @@ export default function CalendarScreen() {
   const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, onCancel: () => { }, isDestructive: false, confirmLabel: undefined as string | undefined, cancelLabel: undefined as string | undefined });
 
   // Search State
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchChips, setSearchChips] = useState<string[]>([]);
+  const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('AND');
 
   // Active Tab for Event Form
   const [activeTab, setActiveTab] = useState('General');
@@ -284,8 +287,14 @@ export default function CalendarScreen() {
 
   const handleEditStart = (event: TennisEvent) => {
     const start = new Date(event.start_date);
-    const startDate = start.toISOString().split('T')[0];
-    const startTime = start.toISOString().split('T')[1].substring(0, 5);
+    // Extract local time components instead of UTC (toISOString)
+    const year = start.getFullYear();
+    const month = String(start.getMonth() + 1).padStart(2, '0');
+    const day = String(start.getDate()).padStart(2, '0');
+    const hours = String(start.getHours()).padStart(2, '0');
+    const minutes = String(start.getMinutes()).padStart(2, '0');
+    const startDate = `${year}-${month}-${day}`;
+    const startTime = `${hours}:${minutes}`;
 
     // Helper to parse comma-separated ID strings into number arrays
     const parseIds = (idStr: string | null | undefined): number[] => {
@@ -361,7 +370,7 @@ export default function CalendarScreen() {
     }
 
     try {
-      const dateTimeStr = `${formState.startDate}T${formState.startTime || '09:00'}:00.000Z`;
+      const dateTimeStr = `${formState.startDate}T${formState.startTime || '09:00'}:00`;
       const startDate = new Date(dateTimeStr).getTime();
 
       const eventData = {
@@ -479,24 +488,33 @@ export default function CalendarScreen() {
   };
 
   const promptDeleteAll = () => {
-    // Get filtered events based on current search
-    const filteredEvents = searchQuery
-      ? events.filter(e => {
-        const search = searchQuery.toLowerCase();
-        const name = (e.name || '').toLowerCase();
-        const description = (e.description || '').toLowerCase();
-        const venueNames = (e.venue_names || '').toLowerCase();
-        const eventTypeNames = (e.event_type_names || '').toLowerCase();
-        const systemNames = (e.system_names || '').toLowerCase();
-        return name.includes(search) || description.includes(search) || venueNames.includes(search) || eventTypeNames.includes(search) || systemNames.includes(search);
-      })
-      : events;
+    // Get filtered events based on current search chips
+    const filteredEvents = filterItemsByChips(
+      events,
+      searchChips,
+      (event) => {
+        const dateStr = formatDateForSearch(event.start_date);
+        const timeStr = formatTimeForSearch(event.start_date);
+        const seriesBadge = event.is_series_event ? 'SERIES' : '';
+        return `
+          ${event.name}
+          ${event.description || ''}
+          ${dateStr}
+          ${timeStr}
+          ${event.event_type_names || ''}
+          ${event.system_names || ''}
+          ${event.venue_names || ''}
+          ${seriesBadge}
+        `;
+      },
+      searchMode
+    );
 
-    const isFiltered = searchQuery.trim() !== '';
+    const isFiltered = searchChips.length > 0;
     setConfirmConfig({
       title: isFiltered ? `Delete ${filteredEvents.length} Filtered Event${filteredEvents.length !== 1 ? 's' : ''}?` : 'Delete All Events?',
       message: isFiltered
-        ? `This will permanently delete the ${filteredEvents.length} event(s) that match your current search filter "${searchQuery}". Other events will not be affected. This cannot be undone.`
+        ? `This will permanently delete the ${filteredEvents.length} event(s) that match your current search filters (${searchChips.join(', ')}). Other events will not be affected. This cannot be undone.`
         : 'This will permanently remove ALL events from the database. This action cannot be undone.',
       isDestructive: true,
       confirmLabel: undefined,
@@ -1297,21 +1315,23 @@ export default function CalendarScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScreenHeader
-        title="Calendar"
+        title="Events"
         rightAction={
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
               <Text style={styles.buttonTextWhite}>
-                {searchQuery
-                  ? `Delete Filtered (${events.filter(e => {
-                    const search = searchQuery.toLowerCase();
-                    const name = (e.name || '').toLowerCase();
-                    const description = (e.description || '').toLowerCase();
-                    const venueNames = (e.venue_names || '').toLowerCase();
-                    const eventTypeNames = (e.event_type_names || '').toLowerCase();
-                    const systemNames = (e.system_names || '').toLowerCase();
-                    return name.includes(search) || description.includes(search) || venueNames.includes(search) || eventTypeNames.includes(search) || systemNames.includes(search);
-                  }).length})`
+                {searchChips.length > 0
+                  ? `Delete Filtered (${filterItemsByChips(
+                    events,
+                    searchChips,
+                    (event) => {
+                      const dateStr = formatDateForSearch(event.start_date);
+                      const timeStr = formatTimeForSearch(event.start_date);
+                      const seriesBadge = event.is_series_event ? 'SERIES' : '';
+                      return `${event.name} ${event.description || ''} ${dateStr} ${timeStr} ${event.event_type_names || ''} ${event.system_names || ''} ${event.venue_names || ''} ${seriesBadge}`;
+                    },
+                    searchMode
+                  ).length})`
                   : `Delete All (${events.length})`}
               </Text>
             </TouchableOpacity>
@@ -1328,40 +1348,38 @@ export default function CalendarScreen() {
         </View>
       ) : (
         <>
-          {/* Search Input and Count */}
-          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-            <TextInput
-              style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 8 }]}
-              placeholder="Search events..."
-              placeholderTextColor={theme.colors.muted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            <Text style={{ color: theme.colors.muted, fontSize: 12, marginBottom: 8 }}>
-              {searchQuery
-                ? `Showing ${events.filter(e => {
-                  const search = searchQuery.toLowerCase();
-                  const name = (e.name || '').toLowerCase();
-                  const description = (e.description || '').toLowerCase();
-                  const venueNames = (e.venue_names || '').toLowerCase();
-                  const eventTypeNames = (e.event_type_names || '').toLowerCase();
-                  const systemNames = (e.system_names || '').toLowerCase();
-                  return name.includes(search) || description.includes(search) || venueNames.includes(search) || eventTypeNames.includes(search) || systemNames.includes(search);
-                }).length} of ${events.length} events`
-                : `${events.length} events`}
-            </Text>
-          </View>
+          {/* Search with Chips */}
+          <SearchWithChips
+            chips={searchChips}
+            onChipsChange={setSearchChips}
+            mode={searchMode}
+            onModeChange={setSearchMode}
+            placeholder="Type and press ENTER to add filter..."
+            resultCount={filterItemsByChips(
+              events,
+              searchChips,
+              (event) => {
+                const dateStr = formatDateForSearch(event.start_date);
+                const timeStr = formatTimeForSearch(event.start_date);
+                const seriesBadge = event.is_series_event ? 'SERIES' : '';
+                return `${event.name} ${event.description || ''} ${dateStr} ${timeStr} ${event.event_type_names || ''} ${event.system_names || ''} ${event.venue_names || ''} ${seriesBadge}`;
+              },
+              searchMode
+            ).length}
+            totalCount={events.length}
+          />
           <FlatList
-            data={events.filter(e => {
-              if (!searchQuery) return true;
-              const search = searchQuery.toLowerCase();
-              const name = (e.name || '').toLowerCase();
-              const description = (e.description || '').toLowerCase();
-              const venueNames = (e.venue_names || '').toLowerCase();
-              const eventTypeNames = (e.event_type_names || '').toLowerCase();
-              const systemNames = (e.system_names || '').toLowerCase();
-              return name.includes(search) || description.includes(search) || venueNames.includes(search) || eventTypeNames.includes(search) || systemNames.includes(search);
-            })}
+            data={filterItemsByChips(
+              events,
+              searchChips,
+              (event) => {
+                const dateStr = formatDateForSearch(event.start_date);
+                const timeStr = formatTimeForSearch(event.start_date);
+                const seriesBadge = event.is_series_event ? 'SERIES' : '';
+                return `${event.name} ${event.description || ''} ${dateStr} ${timeStr} ${event.event_type_names || ''} ${event.system_names || ''} ${event.venue_names || ''} ${seriesBadge}`;
+              },
+              searchMode
+            )}
             keyExtractor={item => item.event_id?.toString() || Math.random().toString()}
             renderItem={renderEventCard}
             contentContainerStyle={styles.list}
