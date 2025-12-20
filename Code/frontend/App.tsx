@@ -211,7 +211,7 @@ function AppContent() {
                 backgroundColor: theme.colors.surface,
                 borderTopColor: theme.colors.background,
                 borderTopWidth: 16,
-                height: 64,
+                height: 65,
                 elevation: 10,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: -2 },
@@ -220,7 +220,13 @@ function AppContent() {
               },
               tabBarActiveTintColor: theme.colors.primary,
               tabBarInactiveTintColor: theme.colors.muted,
-              tabBarLabelStyle: { fontSize: 14, paddingBottom: 4 },
+              tabBarLabelStyle: { fontSize: 12, marginTop: 1, marginBottom: 6 },
+              tabBarIcon: ({ focused, color }) => (
+                <Text style={{ fontSize: 16, color, marginTop: 6 }}>
+                  {focused ? '▼' : '▽'}
+                </Text>
+              ),
+              tabBarLabelPosition: 'below-icon',
             }}
           >
             <Tab.Screen name="Teams" component={TeamsScreen} />

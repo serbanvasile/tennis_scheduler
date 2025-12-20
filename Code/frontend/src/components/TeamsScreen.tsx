@@ -291,7 +291,8 @@ export default function TeamsScreen() {
                         onChipsChange={setSearchChips}
                         mode={searchMode}
                         onModeChange={setSearchMode}
-                        placeholder="Type and press ENTER to add filter..."
+                        placeholder="Search teams by name, sport, colors..."
+                        topSpacing={true}
                         resultCount={filterItemsByChips(
                             teams,
                             searchChips,
@@ -437,7 +438,7 @@ const styles = StyleSheet.create({
     title: { fontSize: 24, fontWeight: 'bold' },
     addButton: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
     addButtonText: { color: 'black', fontWeight: 'bold' },
-    list: { padding: 16 },
+    list: { paddingHorizontal: 16, paddingBottom: 15 },
 
     card: {
         padding: 20,

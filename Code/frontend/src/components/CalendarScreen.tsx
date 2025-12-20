@@ -195,8 +195,13 @@ export default function CalendarScreen() {
   // Teams and Members
   const [teams, setTeams] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
-  const [teamSearchQuery, setTeamSearchQuery] = useState('');
-  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  // Search state for form fields
+  const [venueSearchChips, setVenueSearchChips] = useState<string[]>([]);
+  const [venueSearchMode, setVenueSearchMode] = useState<'AND' | 'OR'>('OR');
+  const [teamSearchChips, setTeamSearchChips] = useState<string[]>([]);
+  const [teamSearchMode, setTeamSearchMode] = useState<'AND' | 'OR'>('OR');
+  const [memberSearchChips, setMemberSearchChips] = useState<string[]>([]);
+  const [memberSearchMode, setMemberSearchMode] = useState<'AND' | 'OR'>('OR');
 
   const { theme } = useTheme();
 
@@ -337,10 +342,10 @@ export default function CalendarScreen() {
     const parsedTeamIds = parseIds((event as any).team_ids);
     const parsedMemberIds = parseIds((event as any).member_ids);
     if (parsedTeamIds.length > 0) {
-      setTeamSearchQuery('*');
+      setTeamSearchChips(['*']);
     }
     if (parsedMemberIds.length > 0) {
-      setMemberSearchQuery('*');
+      setMemberSearchChips(['*']);
     }
 
     setEditingEventId(event.event_id);
@@ -937,8 +942,27 @@ export default function CalendarScreen() {
           <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Venues
             </Text>
+            <SearchWithChips
+              chips={venueSearchChips}
+              onChipsChange={setVenueSearchChips}
+              mode={venueSearchMode}
+              onModeChange={setVenueSearchMode}
+              placeholder="Type venue name and press ENTER..."
+              resultCount={filterItemsByChips(
+                venues,
+                venueSearchChips,
+                (v) => `${v.name} ${v.address || ''}`,
+                venueSearchMode
+              ).length}
+              totalCount={venues.length}
+            />
             <View style={styles.chipContainer}>
-              {venues.map(v => (
+              {filterItemsByChips(
+                venues,
+                venueSearchChips,
+                (v) => `${v.name} ${v.address || ''}`,
+                venueSearchMode
+              ).map(v => (
                 <TouchableOpacity
                   key={v.venue_id}
                   style={[
@@ -1062,209 +1086,60 @@ export default function CalendarScreen() {
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Teams
             </Text>
 
-            {/* Team Search with Show All button */}
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              <TextInput
-                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1, marginRight: 8 }]}
-                value={teamSearchQuery}
-                onChangeText={setTeamSearchQuery}
-                placeholder="Search teams... (use * for wildcard)"
-                placeholderTextColor={theme.colors.muted}
-              />
-              <TouchableOpacity
-                style={[styles.chip, { borderColor: theme.colors.border, paddingHorizontal: 12 }]}
-                onPress={() => setTeamSearchQuery('*')}
-              >
-                <Text style={[styles.chipText, { color: theme.colors.text }]}>Show All</Text>
-              </TouchableOpacity>
-            </View>
+            <SearchWithChips
+              chips={teamSearchChips}
+              onChipsChange={setTeamSearchChips}
+              mode={teamSearchMode}
+              onModeChange={setTeamSearchMode}
+              placeholder="Type team name and press ENTER..."
+              resultCount={filterItemsByChips(
+                teams,
+                teamSearchChips,
+                (t) => `${t.name} ${t.sport_name || ''}`,
+                teamSearchMode
+              ).length}
+              totalCount={teams.length}
+            />
 
             {/* Teams List */}
-            {teamSearchQuery.trim() && (
+            {teamSearchChips.length > 0 && (
               <View style={styles.chipContainer}>
-                {teams
-                  .filter(t => {
-                    const search = teamSearchQuery.toLowerCase();
+                {filterItemsByChips(
+                  teams,
+                  teamSearchChips,
+                  (t) => `${t.name} ${t.sport_name || ''}`,
+                  teamSearchMode
+                ).map(team => (
+                  <TouchableOpacity
+                    key={team.team_id}
+                    style={[
+                      styles.chip,
+                      { borderColor: theme.colors.border },
+                      formState.teamIds.includes(team.team_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                    ]}
+                    onPress={() => {
+                      if (formState.teamIds.includes(team.team_id)) {
+                        // Removing team - check for confirmation if editing existing event
+                        const handleRemove = () => {
+                          const teamMembers = members.filter(m =>
+                            (m as any).teams?.some((t: any) => t.team_id === team.team_id)
+                          ).map(m => m.member_id);
+                          setFormState(prev => ({
+                            ...prev,
+                            teamIds: prev.teamIds.filter(id => id !== team.team_id),
+                            memberIds: prev.memberIds.filter(mid => !teamMembers.includes(mid))
+                          }));
+                        };
 
-                    // Wildcard support
-                    if (search === '*') return true;
-                    if (search.startsWith('*') && search.endsWith('*')) {
-                      const term = search.slice(1, -1);
-                      return t.name.toLowerCase().includes(term) || (t.sport_name || '').toLowerCase().includes(term);
-                    }
-                    if (search.startsWith('*')) {
-                      const term = search.slice(1);
-                      return t.name.toLowerCase().endsWith(term) || (t.sport_name || '').toLowerCase().endsWith(term);
-                    }
-                    if (search.endsWith('*')) {
-                      const term = search.slice(0, -1);
-                      return t.name.toLowerCase().startsWith(term) || (t.sport_name || '').toLowerCase().startsWith(term);
-                    }
-
-                    // Regular search
-                    const name = t.name.toLowerCase();
-                    const sport = (t.sport_name || '').toLowerCase();
-                    return name.includes(search) || sport.includes(search);
-                  })
-                  .map(team => (
-                    <TouchableOpacity
-                      key={team.team_id}
-                      style={[
-                        styles.chip,
-                        { borderColor: theme.colors.border },
-                        formState.teamIds.includes(team.team_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                      ]}
-                      onPress={() => {
-                        if (formState.teamIds.includes(team.team_id)) {
-                          // Removing team - check for confirmation if editing existing event
-                          const handleRemove = () => {
-                            const teamMembers = members.filter(m =>
-                              (m as any).teams?.some((t: any) => t.team_id === team.team_id)
-                            ).map(m => m.member_id);
-                            setFormState(prev => ({
-                              ...prev,
-                              teamIds: prev.teamIds.filter(id => id !== team.team_id),
-                              memberIds: prev.memberIds.filter(mid => !teamMembers.includes(mid))
-                            }));
-                          };
-
-                          if (editingEventId) {
-                            const associatedMembers = formState.memberIds.filter(mid => {
-                              const member = members.find(m => m.member_id === mid);
-                              return (member as any).teams?.some((t: any) => t.team_id === team.team_id);
-                            });
-                            if (associatedMembers.length > 0) {
-                              setConfirmConfig({
-                                title: `Remove ${team.name}?`,
-                                message: `This will also remove ${associatedMembers.length} member(s) from this team. Continue?`,
-                                isDestructive: true,
-                                confirmLabel: undefined,
-                                cancelLabel: undefined,
-                                onConfirm: () => {
-                                  handleRemove();
-                                  setConfirmVisible(false);
-                                },
-                                onCancel: () => {
-                                  setConfirmVisible(false);
-                                }
-                              });
-                              setConfirmVisible(true);
-                            } else {
-                              handleRemove();
-                            }
-                          } else {
-                            handleRemove();
-                          }
-                        } else {
-                          // Adding team
-                          setFormState(prev => ({ ...prev, teamIds: [...prev.teamIds, team.team_id] }));
-                        }
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          { color: theme.colors.text },
-                          formState.teamIds.includes(team.team_id) && { color: 'black', fontWeight: 'bold' }
-                        ]}
-                        numberOfLines={2}
-                        ellipsizeMode="tail"
-                      >
-                        {team.name} {team.sport_name ? `(${team.sport_name})` : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-              </View>
-            )}
-          </View>
-
-          {/* Members (only if teams selected) */}
-          {formState.teamIds.length > 0 && (
-            <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Members
-              </Text>
-
-              {/* Member Search with Show All button */}
-              <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, flex: 1, marginRight: 8 }]}
-                  value={memberSearchQuery}
-                  onChangeText={setMemberSearchQuery}
-                  placeholder="Search members... (use * for wildcard)"
-                  placeholderTextColor={theme.colors.muted}
-                />
-                <TouchableOpacity
-                  style={[styles.chip, { borderColor: theme.colors.border, paddingHorizontal: 12 }]}
-                  onPress={() => setMemberSearchQuery('*')}
-                >
-                  <Text style={[styles.chipText, { color: theme.colors.text }]}>Show All</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Members List */}
-              <View style={styles.chipContainer}>
-                {members
-                  .filter(m => {
-                    if (!memberSearchQuery.trim()) return false; // Show nothing until search
-
-                    // Only show members from selected teams
-                    const memberTeams = (m as any).teams || [];
-                    const isInSelectedTeam = formState.teamIds.some(teamId =>
-                      memberTeams.some((t: any) => t.team_id === teamId)
-                    );
-                    if (!isInSelectedTeam) return false;
-
-                    const search = memberSearchQuery.toLowerCase();
-                    const name = `${m.first_name} ${m.last_name}`.toLowerCase();
-
-                    // Get role and position from teams matching selected teams
-                    const memberTeamsInEvent = (m as any).teams?.filter((t: any) =>
-                      formState.teamIds.includes(t.team_id)
-                    ) || [];
-                    const roles = memberTeamsInEvent.map((t: any) => t.role_names || '').join(' ').toLowerCase();
-                    const positions = memberTeamsInEvent.map((t: any) => t.position_names || '').join(' ').toLowerCase();
-                    const searchableText = `${name} ${roles} ${positions}`;
-
-                    // Wildcard support
-                    if (search === '*') return true;
-                    if (search.startsWith('*') && search.endsWith('*')) {
-                      const term = search.slice(1, -1);
-                      return searchableText.includes(term);
-                    }
-                    if (search.startsWith('*')) {
-                      const term = search.slice(1);
-                      return searchableText.endsWith(term);
-                    }
-                    if (search.endsWith('*')) {
-                      const term = search.slice(0, -1);
-                      return searchableText.startsWith(term);
-                    }
-
-                    // Regular search
-                    return searchableText.includes(search);
-                  })
-                  .map(member => (
-                    <TouchableOpacity
-                      key={member.member_id}
-                      style={[
-                        styles.chip,
-                        { borderColor: theme.colors.border },
-                        formState.memberIds.includes(member.member_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                      ]}
-                      onPress={() => {
-                        if (formState.memberIds.includes(member.member_id)) {
-                          // Remove member
-                          const handleRemove = () => {
-                            setFormState(prev => ({
-                              ...prev,
-                              memberIds: prev.memberIds.filter(id => id !== member.member_id)
-                            }));
-                          };
-
-                          if (editingEventId) {
+                        if (editingEventId) {
+                          const associatedMembers = formState.memberIds.filter(mid => {
+                            const member = members.find(m => m.member_id === mid);
+                            return (member as any).teams?.some((t: any) => t.team_id === team.team_id);
+                          });
+                          if (associatedMembers.length > 0) {
                             setConfirmConfig({
-                              title: 'Remove Member?',
-                              message: `Remove ${member.first_name} ${member.last_name} from this event?`,
+                              title: `Remove ${team.name}?`,
+                              message: `This will also remove ${associatedMembers.length} member(s) from this team. Continue?`,
                               isDestructive: true,
                               confirmLabel: undefined,
                               cancelLabel: undefined,
@@ -1281,29 +1156,151 @@ export default function CalendarScreen() {
                             handleRemove();
                           }
                         } else {
-                          // Add member
-                          setFormState(prev => ({ ...prev, memberIds: [...prev.memberIds, member.member_id] }));
+                          handleRemove();
                         }
-                      }}
-                    >
-                      <Text style={[
+                      } else {
+                        // Adding team
+                        setFormState(prev => ({ ...prev, teamIds: [...prev.teamIds, team.team_id] }));
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
                         styles.chipText,
                         { color: theme.colors.text },
-                        formState.memberIds.includes(member.member_id) && { color: 'black', fontWeight: 'bold' }
-                      ]}>
-                        {member.first_name} {member.last_name}
-                        {(() => {
-                          const memberTeamsInEvent = (member as any).teams?.filter((t: any) =>
-                            formState.teamIds.includes(t.team_id)
-                          ) || [];
-                          const roles = memberTeamsInEvent.map((t: any) => t.role_names).filter(Boolean).join(', ');
-                          const positions = memberTeamsInEvent.map((t: any) => t.position_names).filter(Boolean).join(', ');
-                          const details = [roles, positions].filter(Boolean).join(' • ');
-                          return details ? ` (${details})` : '';
-                        })()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        formState.teamIds.includes(team.team_id) && { color: 'black', fontWeight: 'bold' }
+                      ]}
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                    >
+                      {team.name} {team.sport_name ? `(${team.sport_name})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Members (only if teams selected) */}
+          {formState.teamIds.length > 0 && (
+            <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Members
+              </Text>
+
+              <SearchWithChips
+                chips={memberSearchChips}
+                onChipsChange={setMemberSearchChips}
+                mode={memberSearchMode}
+                onModeChange={setMemberSearchMode}
+                placeholder="Type member name and press ENTER..."
+                resultCount={filterItemsByChips(
+                  members.filter(m => {
+                    const memberTeams = (m as any).teams || [];
+                    return formState.teamIds.some(teamId =>
+                      memberTeams.some((t: any) => t.team_id === teamId)
+                    );
+                  }),
+                  memberSearchChips,
+                  (m) => {
+                    const name = `${m.first_name} ${m.last_name}`;
+                    const memberTeamsInEvent = (m as any).teams?.filter((t: any) =>
+                      formState.teamIds.includes(t.team_id)
+                    ) || [];
+                    const roles = memberTeamsInEvent.map((t: any) => t.role_names || '').join(' ');
+                    const positions = memberTeamsInEvent.map((t: any) => t.position_names || '').join(' ');
+                    return `${name} ${roles} ${positions}`;
+                  },
+                  memberSearchMode
+                ).length}
+                totalCount={members.filter(m => {
+                  const memberTeams = (m as any).teams || [];
+                  return formState.teamIds.some(teamId =>
+                    memberTeams.some((t: any) => t.team_id === teamId)
+                  );
+                }).length}
+              />
+
+              {/* Members List */}
+              <View style={styles.chipContainer}>
+                {filterItemsByChips(
+                  members.filter(m => {
+                    const memberTeams = (m as any).teams || [];
+                    return formState.teamIds.some(teamId =>
+                      memberTeams.some((t: any) => t.team_id === teamId)
+                    );
+                  }),
+                  memberSearchChips,
+                  (m) => {
+                    const name = `${m.first_name} ${m.last_name}`;
+                    const memberTeamsInEvent = (m as any).teams?.filter((t: any) =>
+                      formState.teamIds.includes(t.team_id)
+                    ) || [];
+                    const roles = memberTeamsInEvent.map((t: any) => t.role_names || '').join(' ');
+                    const positions = memberTeamsInEvent.map((t: any) => t.position_names || '').join(' ');
+                    return `${name} ${roles} ${positions}`;
+                  },
+                  memberSearchMode
+                ).map(member => (
+                  <TouchableOpacity
+                    key={member.member_id}
+                    style={[
+                      styles.chip,
+                      { borderColor: theme.colors.border },
+                      formState.memberIds.includes(member.member_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                    ]}
+                    onPress={() => {
+                      if (formState.memberIds.includes(member.member_id)) {
+                        // Remove member
+                        const handleRemove = () => {
+                          setFormState(prev => ({
+                            ...prev,
+                            memberIds: prev.memberIds.filter(id => id !== member.member_id)
+                          }));
+                        };
+
+                        if (editingEventId) {
+                          setConfirmConfig({
+                            title: 'Remove Member?',
+                            message: `Remove ${member.first_name} ${member.last_name} from this event?`,
+                            isDestructive: true,
+                            confirmLabel: undefined,
+                            cancelLabel: undefined,
+                            onConfirm: () => {
+                              handleRemove();
+                              setConfirmVisible(false);
+                            },
+                            onCancel: () => {
+                              setConfirmVisible(false);
+                            }
+                          });
+                          setConfirmVisible(true);
+                        } else {
+                          handleRemove();
+                        }
+                      } else {
+                        // Add member
+                        setFormState(prev => ({ ...prev, memberIds: [...prev.memberIds, member.member_id] }));
+                      }
+                    }}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      { color: theme.colors.text },
+                      formState.memberIds.includes(member.member_id) && { color: 'black', fontWeight: 'bold' }
+                    ]}>
+                      {member.first_name} {member.last_name}
+                      {(() => {
+                        const memberTeamsInEvent = (member as any).teams?.filter((t: any) =>
+                          formState.teamIds.includes(t.team_id)
+                        ) || [];
+                        const roles = memberTeamsInEvent.map((t: any) => t.role_names).filter(Boolean).join(', ');
+                        const positions = memberTeamsInEvent.map((t: any) => t.position_names).filter(Boolean).join(', ');
+                        const details = [roles, positions].filter(Boolean).join(' • ');
+                        return details ? ` (${details})` : '';
+                      })()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
           )}
@@ -1354,7 +1351,8 @@ export default function CalendarScreen() {
             onChipsChange={setSearchChips}
             mode={searchMode}
             onModeChange={setSearchMode}
-            placeholder="Type and press ENTER to add filter..."
+            placeholder="Search events by name, date, time, type..."
+            topSpacing={true}
             resultCount={filterItemsByChips(
               events,
               searchChips,
@@ -1449,7 +1447,7 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: 16 },
+  list: { paddingHorizontal: 16, paddingBottom: 15 },
   card: { padding: 16, borderRadius: 8, borderWidth: 1, marginBottom: 12 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   cardTitle: { fontSize: 18, fontWeight: 'bold' },

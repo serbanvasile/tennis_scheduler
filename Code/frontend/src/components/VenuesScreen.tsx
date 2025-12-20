@@ -603,7 +603,8 @@ export default function VenuesScreen() {
                         onChipsChange={setSearchChips}
                         mode={searchMode}
                         onModeChange={setSearchMode}
-                        placeholder="Type and press ENTER to add filter..."
+                        placeholder="Search venues by name, address, courts..."
+                        topSpacing={true}
                         resultCount={filterItemsByChips(
                             venues,
                             searchChips,
@@ -807,7 +808,7 @@ export default function VenuesScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    list: { padding: 16 },
+    list: { paddingHorizontal: 16, paddingBottom: 15 },
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     emptyText: { textAlign: 'center', marginTop: 20, fontSize: 16 },
 

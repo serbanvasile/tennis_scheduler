@@ -1,54 +1,49 @@
-import React, { useState } from 'react';
-import { View, TextInput, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../ui/theme';
 
 interface SearchWithChipsProps {
     chips: string[];
     onChipsChange: (chips: string[]) => void;
+    mode?: 'AND' | 'OR';
+    onModeChange?: (mode: 'AND' | 'OR') => void;
     placeholder?: string;
     resultCount?: number;
     totalCount?: number;
-    mode?: 'AND' | 'OR';
-    onModeChange?: (mode: 'AND' | 'OR') => void;
+    topSpacing?: boolean; // Add top spacing for main screens
 }
 
-/**
- * Reusable search input component with filter chips and mode selector.
- * - Type text and press ENTER to add a chip
- * - Click X on a chip to remove it
- * - Click ⋮ (three dots) to toggle between AND/OR modes
- * - Displays result count when filtering
- */
 export function SearchWithChips({
     chips,
     onChipsChange,
-    placeholder = 'Search...',
+    mode = 'AND',
+    onModeChange,
+    placeholder = 'Type and press ENTER...',
     resultCount,
     totalCount,
-    mode = 'AND',
-    onModeChange
+    topSpacing = false
 }: SearchWithChipsProps) {
     const { theme } = useTheme();
     const [inputValue, setInputValue] = useState('');
     const [showModeSelector, setShowModeSelector] = useState(false);
+    const inputRef = useRef<any>(null);
 
     const handleAddChip = () => {
         const trimmed = inputValue.trim();
         if (trimmed && !chips.includes(trimmed)) {
             onChipsChange([...chips, trimmed]);
             setInputValue('');
+            // Focus back to input after render
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    inputRef.current?.focus();
+                });
+            });
         }
     };
 
     const handleRemoveChip = (chipToRemove: string) => {
-        onChipsChange(chips.filter(chip => chip !== chipToRemove));
-    };
-
-    const handleKeyPress = (e: any) => {
-        if (Platform.OS === 'web' && (e.key === 'Enter' || e.keyCode === 13)) {
-            e.preventDefault();
-            handleAddChip();
-        }
+        onChipsChange(chips.filter(c => c !== chipToRemove));
     };
 
     const handleModeChange = (newMode: 'AND' | 'OR') => {
@@ -58,28 +53,63 @@ export function SearchWithChips({
         setShowModeSelector(false);
     };
 
-    return (
-        <View style={styles.container}>
-            {/* Search Input with Settings Button */}
-            <View style={styles.inputContainer}>
-                <TextInput
-                    style={[
-                        styles.input,
-                        {
-                            color: theme.colors.text,
-                            borderColor: theme.colors.border,
-                            backgroundColor: theme.colors.inputBackground || theme.colors.surface
-                        }
-                    ]}
-                    placeholder={placeholder}
-                    placeholderTextColor={theme.colors.muted}
-                    value={inputValue}
-                    onChangeText={setInputValue}
-                    onSubmitEditing={handleAddChip}
-                    onKeyPress={handleKeyPress}
-                />
+    const handleKeyPress = (e: any) => {
+        if (e.nativeEvent.key === 'Enter') {
+            handleAddChip();
+        }
+    };
 
-                {/* Settings Button (Three Dots) */}
+    return (
+        <View style={[styles.container, topSpacing && styles.containerWithTopSpacing]}>
+            {/* Input Container with Chips Inside */}
+            <View style={styles.inputContainer}>
+                <View style={[
+                    styles.inputWrapper,
+                    {
+                        borderColor: theme.colors.border,
+                        backgroundColor: theme.colors.inputBackground || theme.colors.surface
+                    }
+                ]}>
+                    {/* Chips inside the input */}
+                    {chips.map((chip, index) => (
+                        <View
+                            key={index}
+                            style={[
+                                styles.chip,
+                                {
+                                    backgroundColor: theme.colors.primary,
+                                    borderColor: theme.colors.primary
+                                }
+                            ]}
+                        >
+                            <Text style={styles.chipText}>{chip}</Text>
+                            <TouchableOpacity
+                                onPress={() => handleRemoveChip(chip)}
+                                style={styles.chipRemove}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Text style={styles.chipRemoveText}>×</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+
+                    {/* Text Input */}
+                    <TextInput
+                        ref={inputRef}
+                        style={[
+                            styles.textInput,
+                            { color: theme.colors.text }
+                        ]}
+                        placeholder={placeholder}
+                        placeholderTextColor={theme.colors.muted}
+                        value={inputValue}
+                        onChangeText={setInputValue}
+                        onSubmitEditing={handleAddChip}
+                        onKeyPress={handleKeyPress}
+                    />
+                </View>
+
+                {/* Settings Button */}
                 {onModeChange && (
                     <TouchableOpacity
                         style={styles.settingsButton}
@@ -140,36 +170,9 @@ export function SearchWithChips({
                 </View>
             )}
 
-            {/* Filter Chips */}
-            {chips.length > 0 && (
-                <View style={styles.chipsContainer}>
-                    {chips.map((chip, index) => (
-                        <View
-                            key={index}
-                            style={[
-                                styles.chip,
-                                {
-                                    backgroundColor: theme.colors.primary,
-                                    borderColor: theme.colors.primary
-                                }
-                            ]}
-                        >
-                            <Text style={styles.chipText}>{chip}</Text>
-                            <TouchableOpacity
-                                onPress={() => handleRemoveChip(chip)}
-                                style={styles.chipRemove}
-                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            >
-                                <Text style={styles.chipRemoveText}>×</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ))}
-                </View>
-            )}
-
             {/* Result Count */}
             {resultCount !== undefined && totalCount !== undefined && (
-                <Text style={{ color: theme.colors.muted, fontSize: 12, marginTop: 8 }}>
+                <Text style={{ color: theme.colors.muted, fontSize: 12, marginTop: 8, marginBottom: 4 }}>
                     {chips.length > 0
                         ? `Showing ${resultCount} of ${totalCount} items (${mode} mode)`
                         : `${totalCount} items`}
@@ -182,38 +185,51 @@ export function SearchWithChips({
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 16,
-        paddingTop: 12
+        paddingTop: 0,
+        paddingBottom: 4
+    },
+    containerWithTopSpacing: {
+        paddingTop: 15
     },
     inputContainer: {
         position: 'relative',
         flexDirection: 'row',
         alignItems: 'center'
     },
-    input: {
+    inputWrapper: {
         flex: 1,
-        padding: 12,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        padding: 6,
         borderRadius: 8,
         borderWidth: 1,
+        minHeight: 44,
+        gap: 4
+    },
+    textInput: {
+        flex: 1,
+        minWidth: 120,
         fontSize: 14,
-        paddingRight: 40 // Make room for settings button
+        padding: 6
     },
     settingsButton: {
         position: 'absolute',
         right: 8,
-        top: 0,
-        bottom: 0,
+        top: 8,
+        width: 28,
+        height: 28,
         justifyContent: 'center',
         alignItems: 'center',
-        width: 32,
-        height: '100%'
+        zIndex: 10
     },
     settingsIcon: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        lineHeight: 24
+        fontSize: 20,
+        fontWeight: 'bold'
     },
     modeSelector: {
         marginTop: 8,
+        marginBottom: 8,
         padding: 12,
         borderRadius: 8,
         borderWidth: 1
@@ -229,31 +245,25 @@ const styles = StyleSheet.create({
         marginBottom: 8
     },
     modeChip: {
-        paddingVertical: 8,
-        paddingHorizontal: 16,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
         borderRadius: 16,
         borderWidth: 1
     },
     modeChipText: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600'
     },
     modeDescription: {
-        fontSize: 11,
-        fontStyle: 'italic'
-    },
-    chipsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginTop: 12
+        fontSize: 12,
+        marginBottom: 4
     },
     chip: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 6,
-        paddingLeft: 12,
-        paddingRight: 8,
+        paddingVertical: 4,
+        paddingLeft: 8,
+        paddingRight: 6,
         borderRadius: 16,
         borderWidth: 1
     },
@@ -261,21 +271,21 @@ const styles = StyleSheet.create({
         color: 'black',
         fontSize: 14,
         fontWeight: '600',
-        marginRight: 6
+        marginRight: 4
     },
     chipRemove: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
+        width: 18,
+        height: 18,
+        borderRadius: 9,
         backgroundColor: 'rgba(0, 0, 0, 0.2)',
         justifyContent: 'center',
         alignItems: 'center'
     },
     chipRemoveText: {
         color: 'black',
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: 'bold',
-        lineHeight: 20
+        lineHeight: 18
     },
     wildcardHint: {
         fontSize: 11,

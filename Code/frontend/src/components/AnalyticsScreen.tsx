@@ -168,7 +168,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 15,
   },
   title: {
     fontSize: 24,

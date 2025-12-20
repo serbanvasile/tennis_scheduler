@@ -12,7 +12,7 @@ export const commonStyles = StyleSheet.create({
         gap: 8
     },
     chip: {
-        paddingVertical: 8,
+        paddingVertical: 12,
         paddingHorizontal: 12,
         borderRadius: 20,
         borderWidth: 1,
@@ -92,10 +92,14 @@ export const commonStyles = StyleSheet.create({
     },
     tab: {
         paddingVertical: 10,
-        paddingHorizontal: 20
+        paddingHorizontal: 20,
+        flexShrink: 0,
+        alignItems: 'center',
+        justifyContent: 'center'
     },
     tabText: {
-        fontWeight: '600'
+        fontWeight: '600',
+        textAlign: 'center'
     },
 
     // Buttons
