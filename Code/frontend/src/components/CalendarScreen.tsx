@@ -1382,7 +1382,7 @@ export default function CalendarScreen() {
             renderItem={renderEventCard}
             contentContainerStyle={styles.list}
             ListEmptyComponent={
-              <Text style={[styles.emptyText, { color: theme.colors.muted }]}>No events found.</Text>
+              <Text style={[styles.emptyText, { color: theme.colors.muted }]}>No events found</Text>
             }
           />
         </>

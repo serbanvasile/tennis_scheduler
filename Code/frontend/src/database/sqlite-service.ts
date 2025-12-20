@@ -118,8 +118,8 @@ class DatabaseService {
   }
 
   async deleteTeam(teamId: number): Promise<any> {
-    const response = await fetch(`${this.API_URL}/teams/${teamId}/delete`, {
-      method: 'PUT',
+    const response = await fetch(`${this.API_URL}/teams/${teamId}`, {
+      method: 'DELETE',
     });
     return await response.json();
   }
@@ -198,12 +198,60 @@ class DatabaseService {
   }
 
   async deleteMember(memberId: number): Promise<any> {
-    const response = await fetch(`${this.API_URL}/members/${memberId}/delete`, { method: 'PUT' });
+    const response = await fetch(`${this.API_URL}/members/${memberId}`, { method: 'DELETE' });
     return await response.json();
   }
 
   async deleteAllMembers(): Promise<any> {
     const response = await fetch(`${this.API_URL}/members`, { method: 'DELETE' });
+    return await response.json();
+  }
+
+  // Batch delete members (for filtered deletes)
+  async deleteMembersBatch(memberIds: number[]): Promise<any> {
+    const response = await fetch(`${this.API_URL}/members/batch-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberIds })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to delete members');
+    }
+
+    return await response.json();
+  }
+
+  // Batch delete teams (for filtered deletes)
+  async deleteTeamsBatch(teamIds: number[]): Promise<any> {
+    const response = await fetch(`${this.API_URL}/teams/batch-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamIds })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to delete teams');
+    }
+
+    return await response.json();
+  }
+
+  // Batch delete venues (for filtered deletes)
+  async deleteVenuesBatch(venueIds: number[]): Promise<any> {
+    const response = await fetch(`${this.API_URL}/venues/batch-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venueIds })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to delete venues');
+    }
+
     return await response.json();
   }
 
@@ -314,7 +362,7 @@ class DatabaseService {
   }
 
   async deleteVenue(venueId: number): Promise<any> {
-    const response = await fetch(`${this.API_URL}/venues/${venueId}/delete`, { method: 'PUT' });
+    const response = await fetch(`${this.API_URL}/venues/${venueId}`, { method: 'DELETE' });
     return await response.json();
   }
 

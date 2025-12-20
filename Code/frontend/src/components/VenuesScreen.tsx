@@ -227,15 +227,10 @@ export default function VenuesScreen() {
     };
 
     const promptDeleteAll = () => {
-        // Get filtered venues based on current search
         const filteredVenues = filterItemsByChips(
             venues,
             searchChips,
-            (venue) => {
-                const courts = venue.courts?.map(c => c.name).join(' ') || '';
-                const fields = venue.fields?.map(f => f.name).join(' ') || '';
-                return `${venue.name} ${venue.address} ${courts} ${fields}`;
-            },
+            (venue) => `${venue.name} ${venue.address || ''}`,
             searchMode
         );
 
@@ -243,20 +238,20 @@ export default function VenuesScreen() {
         setConfirmConfig({
             title: isFiltered ? `Delete ${filteredVenues.length} Filtered Venue${filteredVenues.length !== 1 ? 's' : ''}?` : 'Delete All Venues?',
             message: isFiltered
-                ? `This will permanently delete the ${filteredVenues.length} venue(s) that match your current search filters (${searchChips.join(', ')}), including all associated courts and fields. Other venues will not be affected. This cannot be undone.`
-                : 'This will permanently remove ALL venues from the database, including all associated courts and fields. This action cannot be undone.',
+                ? `This will permanently delete the ${filteredVenues.length} venue(s) that match your current search filters (${searchChips.join(', ')}). Other venues will not be affected. This cannot be undone.`
+                : 'This will permanently remove ALL venues from the database. This action cannot be undone.',
             isDestructive: true,
             onConfirm: async () => {
                 try {
-                    // Delete each filtered venue individually
-                    for (const venue of filteredVenues) {
-                        await databaseService.deleteVenue(venue.venue_id);
-                    }
+                    // Use batch delete instead of looping
+                    const venueIds = filteredVenues.map(v => v.venue_id);
+                    await databaseService.deleteVenuesBatch(venueIds);
                     setConfirmVisible(false);
                     loadData();
                 } catch (e: any) {
                     console.error('Delete venues error:', e);
-                    Alert.alert('Error', e?.message || 'Failed to delete venues');
+                    // Display validation error from backend
+                    Alert.alert('Cannot Delete', e.message || 'Failed to delete venues');
                     setConfirmVisible(false);
                 }
             }
@@ -625,7 +620,7 @@ export default function VenuesScreen() {
                         contentContainerStyle={styles.list}
                         ListEmptyComponent={
                             <Text style={[styles.emptyText, { color: theme.colors.muted }]}>
-                                No venues yet. Create one to add courts and fields.
+                                No venues found
                             </Text>
                         }
                     />

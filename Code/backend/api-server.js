@@ -161,6 +161,302 @@ const linkEventXrefsAsync = async (eventId, xrefs, now) => {
   await Promise.all(insertPromises);
 };
 
+// ============================================================================
+// BATCH DELETE VALIDATION FUNCTIONS
+// ============================================================================
+
+// Validate member deletes (batch)
+async function validateMemberDeletes(memberIds) {
+  if (!memberIds || memberIds.length === 0) {
+    return { canDelete: [], blocked: {} };
+  }
+
+  const results = {
+    canDelete: [],
+    blocked: {}
+  };
+
+  // Get member names for better error messages
+  const memberQuery = `
+    SELECT member_id, first_name, last_name
+    FROM members
+    WHERE member_id IN (${memberIds.map(() => '?').join(',')})
+  `;
+  const members = await dbAll(memberQuery, memberIds);
+  const memberMap = {};
+  members.forEach(m => {
+    memberMap[m.member_id] = `${m.first_name} ${m.last_name}`;
+  });
+
+  // Check event assignments
+  const eventQuery = `
+    SELECT emx.member_id, COUNT(*) as count
+    FROM event_member_xref emx
+    JOIN events e ON emx.event_id = e.event_id
+    WHERE emx.member_id IN (${memberIds.map(() => '?').join(',')})
+      AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)
+    GROUP BY emx.member_id
+  `;
+  const eventBlocks = await dbAll(eventQuery, memberIds);
+
+  // Build results
+  memberIds.forEach(id => {
+    const eventBlock = eventBlocks.find(b => b.member_id === id);
+
+    if (eventBlock && eventBlock.count > 0) {
+      results.blocked[id] = {
+        name: memberMap[id] || `Member ${id}`,
+        events: eventBlock.count
+      };
+    } else {
+      results.canDelete.push(id);
+    }
+  });
+
+  return results;
+}
+
+// Validate team deletes (batch)
+async function validateTeamDeletes(teamIds) {
+  if (!teamIds || teamIds.length === 0) {
+    return { canDelete: [], blocked: {} };
+  }
+
+  const results = {
+    canDelete: [],
+    blocked: {}
+  };
+
+  // Get team names for better error messages
+  const teamQuery = `
+    SELECT team_id, name
+    FROM teams
+    WHERE team_id IN (${teamIds.map(() => '?').join(',')})
+  `;
+  const teams = await dbAll(teamQuery, teamIds);
+  const teamMap = {};
+  teams.forEach(t => {
+    teamMap[t.team_id] = t.name;
+  });
+
+  // Check member assignments (non-deleted members only)
+  const memberQuery = `
+    SELECT tmx.team_id, COUNT(*) as count
+    FROM team_member_xref tmx
+    JOIN members m ON tmx.member_id = m.member_id
+    WHERE tmx.team_id IN (${teamIds.map(() => '?').join(',')})
+      AND (m.deleted_flag IS NULL OR m.deleted_flag = 0)
+    GROUP BY tmx.team_id
+  `;
+  const memberBlocks = await dbAll(memberQuery, teamIds);
+
+  // Check event assignments
+  const eventQuery = `
+    SELECT etx.team_id, COUNT(*) as count
+    FROM event_team_xref etx
+    JOIN events e ON etx.event_id = e.event_id
+    WHERE etx.team_id IN (${teamIds.map(() => '?').join(',')})
+      AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)
+    GROUP BY etx.team_id
+  `;
+  const eventBlocks = await dbAll(eventQuery, teamIds);
+
+  // Build results
+  teamIds.forEach(id => {
+    const memberBlock = memberBlocks.find(b => b.team_id === id);
+    const eventBlock = eventBlocks.find(b => b.team_id === id);
+
+    const hasMembers = memberBlock && memberBlock.count > 0;
+    const hasEvents = eventBlock && eventBlock.count > 0;
+
+    if (hasMembers || hasEvents) {
+      results.blocked[id] = {
+        name: teamMap[id] || `Team ${id}`,
+        members: hasMembers ? memberBlock.count : 0,
+        events: hasEvents ? eventBlock.count : 0
+      };
+    } else {
+      results.canDelete.push(id);
+    }
+  });
+
+  return results;
+}
+
+// Validate venue deletes (batch)
+async function validateVenueDeletes(venueIds) {
+  if (!venueIds || venueIds.length === 0) {
+    return { canDelete: [], blocked: {} };
+  }
+
+  const results = {
+    canDelete: [],
+    blocked: {}
+  };
+
+  // Get venue names for better error messages
+  const venueQuery = `
+    SELECT venue_id, name
+    FROM venues
+    WHERE venue_id IN (${venueIds.map(() => '?').join(',')})
+  `;
+  const venues = await dbAll(venueQuery, venueIds);
+  const venueMap = {};
+  venues.forEach(v => {
+    venueMap[v.venue_id] = v.name;
+  });
+
+  // Check event assignments
+  const eventQuery = `
+    SELECT evx.venue_id, COUNT(*) as count
+    FROM event_venue_xref evx
+    JOIN events e ON evx.event_id = e.event_id
+    WHERE evx.venue_id IN (${venueIds.map(() => '?').join(',')})
+      AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)
+    GROUP BY evx.venue_id
+  `;
+  const eventBlocks = await dbAll(eventQuery, venueIds);
+
+  // Build results
+  venueIds.forEach(id => {
+    const eventBlock = eventBlocks.find(b => b.venue_id === id);
+
+    if (eventBlock && eventBlock.count > 0) {
+      results.blocked[id] = {
+        name: venueMap[id] || `Venue ${id}`,
+        events: eventBlock.count
+      };
+    } else {
+      results.canDelete.push(id);
+    }
+  });
+
+  return results;
+}
+
+// Validate court deletes (batch)
+async function validateCourtDeletes(courtIds) {
+  if (!courtIds || courtIds.length === 0) {
+    return { canDelete: [], blocked: {} };
+  }
+
+  const results = {
+    canDelete: [],
+    blocked: {}
+  };
+
+  // Get court names for better error messages
+  const courtQuery = `
+    SELECT court_id, name
+    FROM courts
+    WHERE court_id IN (${courtIds.map(() => '?').join(',')})
+  `;
+  const courts = await dbAll(courtQuery, courtIds);
+  const courtMap = {};
+  courts.forEach(c => {
+    courtMap[c.court_id] = c.name;
+  });
+
+  // Check event assignments
+  const eventQuery = `
+    SELECT ecx.court_id, COUNT(*) as count
+    FROM event_court_xref ecx
+    JOIN events e ON ecx.event_id = e.event_id
+    WHERE ecx.court_id IN (${courtIds.map(() => '?').join(',')})
+      AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)
+    GROUP BY ecx.court_id
+  `;
+  const eventBlocks = await dbAll(eventQuery, courtIds);
+
+  // Build results
+  courtIds.forEach(id => {
+    const eventBlock = eventBlocks.find(b => b.court_id === id);
+
+    if (eventBlock && eventBlock.count > 0) {
+      results.blocked[id] = {
+        name: courtMap[id] || `Court ${id}`,
+        events: eventBlock.count
+      };
+    } else {
+      results.canDelete.push(id);
+    }
+  });
+
+  return results;
+}
+
+// Validate field deletes (batch)
+async function validateFieldDeletes(fieldIds) {
+  if (!fieldIds || fieldIds.length === 0) {
+    return { canDelete: [], blocked: {} };
+  }
+
+  const results = {
+    canDelete: [],
+    blocked: {}
+  };
+
+  // Get field names for better error messages
+  const fieldQuery = `
+    SELECT field_id, name
+    FROM fields
+    WHERE field_id IN (${fieldIds.map(() => '?').join(',')})
+  `;
+  const fields = await dbAll(fieldQuery, fieldIds);
+  const fieldMap = {};
+  fields.forEach(f => {
+    fieldMap[f.field_id] = f.name;
+  });
+
+  // Check event assignments
+  const eventQuery = `
+    SELECT efx.field_id, COUNT(*) as count
+    FROM event_field_xref efx
+    JOIN events e ON efx.event_id = e.event_id
+    WHERE efx.field_id IN (${fieldIds.map(() => '?').join(',')})
+      AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)
+    GROUP BY efx.field_id
+  `;
+  const eventBlocks = await dbAll(eventQuery, fieldIds);
+
+  // Build results
+  fieldIds.forEach(id => {
+    const eventBlock = eventBlocks.find(b => b.field_id === id);
+
+    if (eventBlock && eventBlock.count > 0) {
+      results.blocked[id] = {
+        name: fieldMap[id] || `Field ${id}`,
+        events: eventBlock.count
+      };
+    } else {
+      results.canDelete.push(id);
+    }
+  });
+
+  return results;
+}
+
+// Helper function to format validation errors into user-friendly messages
+function formatValidationMessage(blocked, entityType) {
+  const blockedItems = Object.values(blocked);
+  if (blockedItems.length === 0) return '';
+
+  let message = `Cannot delete ${blockedItems.length} ${entityType}(s):\n\n`;
+
+  blockedItems.forEach(item => {
+    const reasons = [];
+    if (item.members > 0) reasons.push(`${item.members} member(s)`);
+    if (item.events > 0) reasons.push(`${item.events} event(s)`);
+
+    if (reasons.length > 0) {
+      message += `• "${item.name}" has ${reasons.join(' and ')}\n`;
+    }
+  });
+
+  message += '\nPlease remove these dependencies before deleting.';
+  return message;
+}
+
 function initializeDatabase() {
   console.log('Initializing database schema...');
 
@@ -1151,7 +1447,44 @@ app.put('/api/members/:memberId', (req, res) => {
   );
 });
 
-// Soft Delete Member
+// Hard Delete Member (from main tab)
+app.delete('/api/members/:memberId', (req, res) => {
+  const { memberId } = req.params;
+
+  // First check if member is assigned to any non-deleted events
+  db.get(
+    `SELECT COUNT(*) as eventCount 
+     FROM event_member_xref emx
+     JOIN events e ON emx.event_id = e.event_id
+     WHERE emx.member_id = ? AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)`,
+    [memberId],
+    (err, row) => {
+      if (err) return sendError(res, err, 'Failed to check member events');
+
+      if (row.eventCount > 0) {
+        return res.status(400).json({
+          error: 'Cannot delete member',
+          message: `This member is assigned to ${row.eventCount} event(s). Please remove the member from all events before deleting.`,
+          eventCount: row.eventCount
+        });
+      }
+
+      // No events assigned, proceed with hard deletion
+      db.serialize(() => {
+        db.run(`DELETE FROM team_member_xref WHERE member_id = ?`, [memberId]);
+        db.run(`DELETE FROM member_role_xref WHERE member_id = ?`, [memberId]);
+        db.run(`DELETE FROM member_position_xref WHERE member_id = ?`, [memberId]);
+        db.run(`DELETE FROM member_contact_xref WHERE member_id = ?`, [memberId]);
+        db.run(`DELETE FROM members WHERE member_id = ?`, [memberId], (err) => {
+          if (err) return sendError(res, err, 'Failed to delete member');
+          res.json({ success: true });
+        });
+      });
+    }
+  );
+});
+
+// Soft Delete Member (from individual card - keeping for backward compatibility)
 app.put('/api/members/:memberId/delete', (req, res) => {
   const { memberId } = req.params;
   const now = Date.now();
@@ -1177,6 +1510,52 @@ app.delete('/api/members', (req, res) => {
       res.json({ success: true });
     });
   });
+});
+
+// Batch Delete Members (for filtered deletes from main tab)
+app.post('/api/members/batch-delete', async (req, res) => {
+  const { memberIds } = req.body;
+
+  if (!memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
+    return res.status(400).json({ error: 'memberIds array required' });
+  }
+
+  try {
+    // Validate all members first
+    const validation = await validateMemberDeletes(memberIds);
+
+    if (Object.keys(validation.blocked).length > 0) {
+      return res.status(400).json({
+        error: 'Some members cannot be deleted',
+        validation: validation,
+        message: formatValidationMessage(validation.blocked, 'member')
+      });
+    }
+
+    // All clear - delete in transaction
+    if (validation.canDelete.length > 0) {
+      const placeholders = validation.canDelete.map(() => '?').join(',');
+      await new Promise((resolve, reject) => {
+        db.serialize(() => {
+          db.run(`DELETE FROM team_member_xref WHERE member_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM member_role_xref WHERE member_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM member_position_xref WHERE member_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM member_contact_xref WHERE member_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM members WHERE member_id IN (${placeholders})`, validation.canDelete, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      });
+    }
+
+    res.json({
+      success: true,
+      deleted: validation.canDelete.length
+    });
+  } catch (err) {
+    sendError(res, err, 'Failed to delete members');
+  }
 });
 
 app.get('/api/members/:memberId', (req, res) => {
@@ -1354,7 +1733,66 @@ app.put('/api/teams/:teamId', async (req, res) => {
 
 
 
-// Soft Delete Team
+
+// Hard Delete Team (from main tab)
+app.delete('/api/teams/:teamId', (req, res) => {
+  const { teamId } = req.params;
+
+  // First check if any NON-DELETED members are assigned to this team
+  db.get(
+    `SELECT COUNT(*) as memberCount 
+     FROM team_member_xref tmx
+     JOIN members m ON tmx.member_id = m.member_id
+     WHERE tmx.team_id = ? AND (m.deleted_flag IS NULL OR m.deleted_flag = 0)`,
+    [teamId],
+    (err, row) => {
+      if (err) return sendError(res, err, 'Failed to check team members');
+
+      if (row.memberCount > 0) {
+        return res.status(400).json({
+          error: 'Cannot delete team',
+          message: `This team has ${row.memberCount} member(s) assigned. Please remove all members from the team before deleting.`,
+          memberCount: row.memberCount
+        });
+      }
+
+      // Check if team is assigned to any non-deleted events
+      db.get(
+        `SELECT COUNT(*) as eventCount 
+         FROM event_team_xref etx
+         JOIN events e ON etx.event_id = e.event_id
+         WHERE etx.team_id = ? AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)`,
+        [teamId],
+        (err, eventRow) => {
+          if (err) return sendError(res, err, 'Failed to check team events');
+
+          if (eventRow.eventCount > 0) {
+            return res.status(400).json({
+              error: 'Cannot delete team',
+              message: `This team is assigned to ${eventRow.eventCount} event(s). Please remove the team from all events before deleting.`,
+              eventCount: eventRow.eventCount
+            });
+          }
+
+          // No members or events assigned, proceed with hard deletion
+          db.serialize(() => {
+            db.run(`DELETE FROM team_member_xref WHERE team_id = ?`, [teamId]);
+            db.run(`DELETE FROM member_role_xref WHERE context_table = 'teams' AND context_id = ?`, [teamId]);
+            db.run(`DELETE FROM member_position_xref WHERE context_table = 'teams' AND context_id = ?`, [teamId]);
+            db.run(`DELETE FROM team_sport_xref WHERE team_id = ?`, [teamId]);
+            db.run(`DELETE FROM team_color_xref WHERE team_id = ?`, [teamId]);
+            db.run(`DELETE FROM teams WHERE team_id = ?`, [teamId], function (err) {
+              if (err) return sendError(res, err, 'Failed to delete team');
+              res.json({ success: true, team_id: teamId });
+            });
+          });
+        }
+      );
+    }
+  );
+});
+
+// Soft Delete Team (from individual card - keeping for backward compatibility)
 app.put('/api/teams/:teamId/delete', (req, res) => {
   const { teamId } = req.params;
   const now = Date.now();
@@ -1414,6 +1852,48 @@ app.delete('/api/teams', (req, res) => {
       });
     }
   );
+});
+
+// Batch Delete Teams (for filtered deletes from main tab)
+app.post('/api/teams/batch-delete', async (req, res) => {
+  const { teamIds } = req.body;
+
+  if (!teamIds || !Array.isArray(teamIds) || teamIds.length === 0) {
+    return res.status(400).json({ error: 'teamIds array required' });
+  }
+
+  try {
+    const validation = await validateTeamDeletes(teamIds);
+
+    if (Object.keys(validation.blocked).length > 0) {
+      return res.status(400).json({
+        error: 'Some teams cannot be deleted',
+        validation: validation,
+        message: formatValidationMessage(validation.blocked, 'team')
+      });
+    }
+
+    if (validation.canDelete.length > 0) {
+      const placeholders = validation.canDelete.map(() => '?').join(',');
+      await new Promise((resolve, reject) => {
+        db.serialize(() => {
+          db.run(`DELETE FROM team_member_xref WHERE team_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM member_role_xref WHERE context_table = 'teams' AND context_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM member_position_xref WHERE context_table = 'teams' AND context_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM team_sport_xref WHERE team_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM team_color_xref WHERE team_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM teams WHERE team_id IN (${placeholders})`, validation.canDelete, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      });
+    }
+
+    res.json({ success: true, deleted: validation.canDelete.length });
+  } catch (err) {
+    sendError(res, err, 'Failed to delete teams');
+  }
 });
 
 // 4. TEAM ROSTER
@@ -1774,6 +2254,63 @@ app.put('/api/venues/:id', (req, res) => {
   );
 });
 
+// Hard Delete Venue (from main tab)
+app.delete('/api/venues/:id', (req, res) => {
+  const venueId = req.params.id;
+
+  // First check if venue is assigned to any non-deleted events
+  db.get(
+    `SELECT COUNT(*) as eventCount 
+     FROM event_venue_xref evx
+     JOIN events e ON evx.event_id = e.event_id
+     WHERE evx.venue_id = ? AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)`,
+    [venueId],
+    (err, row) => {
+      if (err) return sendError(res, err, 'Failed to check venue events');
+
+      if (row.eventCount > 0) {
+        return res.status(400).json({
+          error: 'Cannot delete venue',
+          message: `This venue is assigned to ${row.eventCount} event(s). Please remove the venue from all events before deleting.`,
+          eventCount: row.eventCount
+        });
+      }
+
+      // No events assigned, proceed with hard deletion
+      db.serialize(() => {
+        // Delete courts and fields associated with this venue
+        db.all(`SELECT court_id FROM venue_court_xref WHERE venue_id = ?`, [venueId], (err, courts) => {
+          if (courts) {
+            courts.forEach(court => {
+              db.run(`DELETE FROM event_court_xref WHERE court_id = ?`, [court.court_id]);
+              db.run(`DELETE FROM venue_court_xref WHERE court_id = ?`, [court.court_id]);
+              db.run(`DELETE FROM courts WHERE court_id = ?`, [court.court_id]);
+            });
+          }
+        });
+
+        db.all(`SELECT field_id FROM venue_field_xref WHERE venue_id = ?`, [venueId], (err, fields) => {
+          if (fields) {
+            fields.forEach(field => {
+              db.run(`DELETE FROM event_field_xref WHERE field_id = ?`, [field.field_id]);
+              db.run(`DELETE FROM venue_field_xref WHERE field_id = ?`, [field.field_id]);
+              db.run(`DELETE FROM fields WHERE field_id = ?`, [field.field_id]);
+            });
+          }
+        });
+
+        // Delete venue
+        db.run(`DELETE FROM event_venue_xref WHERE venue_id = ?`, [venueId]);
+        db.run(`DELETE FROM venues WHERE venue_id = ?`, [venueId], function (err) {
+          if (err) return sendError(res, err, 'Failed to delete venue');
+          res.json({ deleted: this.changes });
+        });
+      });
+    }
+  );
+});
+
+// Soft Delete Venue (from individual card - keeping for backward compatibility)
 app.put('/api/venues/:id/delete', (req, res) => {
   const venueId = req.params.id;
   const now = Date.now();
@@ -1796,6 +2333,68 @@ app.delete('/api/venues', (req, res) => {
       res.json({ deleted: this.changes });
     });
   });
+});
+
+// Batch Delete Venues (for filtered deletes from main tab)
+app.post('/api/venues/batch-delete', async (req, res) => {
+  const { venueIds } = req.body;
+
+  if (!venueIds || !Array.isArray(venueIds) || venueIds.length === 0) {
+    return res.status(400).json({ error: 'venueIds array required' });
+  }
+
+  try {
+    const validation = await validateVenueDeletes(venueIds);
+
+    if (Object.keys(validation.blocked).length > 0) {
+      return res.status(400).json({
+        error: 'Some venues cannot be deleted',
+        validation: validation,
+        message: formatValidationMessage(validation.blocked, 'venue')
+      });
+    }
+
+    if (validation.canDelete.length > 0) {
+      const placeholders = validation.canDelete.map(() => '?').join(',');
+
+      // Get courts and fields for these venues
+      const courts = await dbAll(`SELECT court_id FROM venue_court_xref WHERE venue_id IN (${placeholders})`, validation.canDelete);
+      const fields = await dbAll(`SELECT field_id FROM venue_field_xref WHERE venue_id IN (${placeholders})`, validation.canDelete);
+
+      await new Promise((resolve, reject) => {
+        db.serialize(() => {
+          // Delete courts and their xrefs
+          if (courts.length > 0) {
+            const courtIds = courts.map(c => c.court_id);
+            const courtPlaceholders = courtIds.map(() => '?').join(',');
+            db.run(`DELETE FROM event_court_xref WHERE court_id IN (${courtPlaceholders})`, courtIds);
+            db.run(`DELETE FROM venue_court_xref WHERE court_id IN (${courtPlaceholders})`, courtIds);
+            db.run(`DELETE FROM courts WHERE court_id IN (${courtPlaceholders})`, courtIds);
+          }
+
+          // Delete fields and their xrefs
+          if (fields.length > 0) {
+            const fieldIds = fields.map(f => f.field_id);
+            const fieldPlaceholders = fieldIds.map(() => '?').join(',');
+            db.run(`DELETE FROM event_field_xref WHERE field_id IN (${fieldPlaceholders})`, fieldIds);
+            db.run(`DELETE FROM venue_field_xref WHERE field_id IN (${fieldPlaceholders})`, fieldIds);
+            db.run(`DELETE FROM fields WHERE field_id IN (${fieldPlaceholders})`, fieldIds);
+          }
+
+          // Delete venue xrefs and venues
+          db.run(`DELETE FROM event_venue_xref WHERE venue_id IN (${placeholders})`, validation.canDelete);
+          db.run(`DELETE FROM venues WHERE venue_id IN (${placeholders})`, validation.canDelete, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      });
+    }
+
+    res.json({ success: true, deleted: validation.canDelete.length });
+  } catch (err) {
+    sendError(res, err, 'Failed to delete venues');
+  }
 });
 
 // 8. COURTS
@@ -1855,7 +2454,43 @@ app.put('/api/courts/:id', (req, res) => {
   );
 });
 
+// Hard Delete Court (from individual card delete button in VenuesScreen)
 app.delete('/api/courts/:id', (req, res) => {
+  const courtId = req.params.id;
+
+  // First check if court is assigned to any non-deleted events
+  db.get(
+    `SELECT COUNT(*) as eventCount 
+     FROM event_court_xref ecx
+     JOIN events e ON ecx.event_id = e.event_id
+     WHERE ecx.court_id = ? AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)`,
+    [courtId],
+    (err, row) => {
+      if (err) return sendError(res, err, 'Failed to check court events');
+
+      if (row.eventCount > 0) {
+        return res.status(400).json({
+          error: 'Cannot delete court',
+          message: `This court is assigned to ${row.eventCount} event(s). Please remove the court from all events before deleting.`,
+          eventCount: row.eventCount
+        });
+      }
+
+      // No events assigned, proceed with hard deletion
+      db.serialize(() => {
+        db.run(`DELETE FROM event_court_xref WHERE court_id = ?`, [courtId]);
+        db.run(`DELETE FROM venue_court_xref WHERE court_id = ?`, [courtId]);
+        db.run(`DELETE FROM courts WHERE court_id = ?`, [courtId], function (err) {
+          if (err) return sendError(res, err, 'Failed to delete court');
+          res.json({ deleted: this.changes });
+        });
+      });
+    }
+  );
+});
+
+// Soft Delete Court (keeping for backward compatibility if needed)
+app.put('/api/courts/:id/delete', (req, res) => {
   const courtId = req.params.id;
   const now = Date.now();
 
@@ -1922,7 +2557,43 @@ app.put('/api/fields/:id', (req, res) => {
   );
 });
 
+// Hard Delete Field (from individual card delete button in VenuesScreen)
 app.delete('/api/fields/:id', (req, res) => {
+  const fieldId = req.params.id;
+
+  // First check if field is assigned to any non-deleted events
+  db.get(
+    `SELECT COUNT(*) as eventCount 
+     FROM event_field_xref efx
+     JOIN events e ON efx.event_id = e.event_id
+     WHERE efx.field_id = ? AND (e.deleted_flag IS NULL OR e.deleted_flag = 0)`,
+    [fieldId],
+    (err, row) => {
+      if (err) return sendError(res, err, 'Failed to check field events');
+
+      if (row.eventCount > 0) {
+        return res.status(400).json({
+          error: 'Cannot delete field',
+          message: `This field is assigned to ${row.eventCount} event(s). Please remove the field from all events before deleting.`,
+          eventCount: row.eventCount
+        });
+      }
+
+      // No events assigned, proceed with hard deletion
+      db.serialize(() => {
+        db.run(`DELETE FROM event_field_xref WHERE field_id = ?`, [fieldId]);
+        db.run(`DELETE FROM venue_field_xref WHERE field_id = ?`, [fieldId]);
+        db.run(`DELETE FROM fields WHERE field_id = ?`, [fieldId], function (err) {
+          if (err) return sendError(res, err, 'Failed to delete field');
+          res.json({ deleted: this.changes });
+        });
+      });
+    }
+  );
+});
+
+// Soft Delete Field (keeping for backward compatibility if needed)
+app.put('/api/fields/:id/delete', (req, res) => {
   const fieldId = req.params.id;
   const now = Date.now();
 

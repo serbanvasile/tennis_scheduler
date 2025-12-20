@@ -199,16 +199,15 @@ export default function TeamsScreen() {
             isDestructive: true,
             onConfirm: async () => {
                 try {
-                    // Delete each filtered team individually
-                    for (const team of filteredTeams) {
-                        await databaseService.deleteTeam(team.team_id);
-                    }
+                    // Use batch delete instead of looping
+                    const teamIds = filteredTeams.map(t => t.team_id);
+                    await databaseService.deleteTeamsBatch(teamIds);
                     setConfirmVisible(false);
                     loadData();
                 } catch (e: any) {
                     console.error('Delete teams error:', e);
-                    const errorMessage = e?.message || 'Failed to delete teams';
-                    showAlert('Error', errorMessage);
+                    // Display validation error from backend
+                    showAlert('Cannot Delete', e.message || 'Failed to delete teams');
                     setConfirmVisible(false);
                 }
             }
@@ -311,6 +310,9 @@ export default function TeamsScreen() {
                         keyExtractor={t => t.team_id.toString()}
                         renderItem={renderTeamCard}
                         contentContainerStyle={styles.list}
+                        ListEmptyComponent={
+                            <Text style={{ textAlign: 'center', marginTop: 20, fontSize: 16, color: theme.colors.muted }}>No teams found</Text>
+                        }
                     />
                 </>
             )}

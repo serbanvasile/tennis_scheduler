@@ -364,12 +364,17 @@ export default function RosterScreen() {
         : 'This will permanently remove ALL members from the database. This cannot be undone.',
       isDestructive: true,
       onConfirm: async () => {
-        // Delete each filtered member individually
-        for (const member of filteredMembers) {
-          await databaseService.deleteMember(member.member_id);
+        try {
+          // Use batch delete instead of looping
+          const memberIds = filteredMembers.map(m => m.member_id);
+          await databaseService.deleteMembersBatch(memberIds);
+          setConfirmVisible(false);
+          loadData();
+        } catch (error: any) {
+          // Display validation error from backend
+          Alert.alert('Cannot Delete', error.message);
+          setConfirmVisible(false);
         }
-        setConfirmVisible(false);
-        loadData();
       }
     });
     setConfirmVisible(true);
@@ -509,6 +514,9 @@ export default function RosterScreen() {
             keyExtractor={m => m.member_id.toString()}
             renderItem={renderMemberCard}
             contentContainerStyle={styles.list}
+            ListEmptyComponent={
+              <Text style={{ textAlign: 'center', marginTop: 20, fontSize: 16, color: theme.colors.muted }}>No members found</Text>
+            }
           />
         </>
       )}
