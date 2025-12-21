@@ -234,7 +234,7 @@ export default function TeamsScreen() {
                 </View>
                 <View style={styles.textContainer}>
                     <Text style={[styles.teamName, { color: theme.colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.teamDetail, { color: theme.colors.primary, fontWeight: 'bold' }]}>{item.sport_name || 'Unknown Sport'}</Text>
+                    <Text style={[styles.teamDetail, { color: theme.colors.primary, fontWeight: 'bold' }]}>{(item.sport_name || 'Unknown Sport').toUpperCase()}</Text>
                     {item.team_colors && (
                         <View style={styles.colorRow}>
                             <Text style={[styles.colorLabel, { color: theme.colors.muted }]}>Colors: {item.team_colors}</Text>

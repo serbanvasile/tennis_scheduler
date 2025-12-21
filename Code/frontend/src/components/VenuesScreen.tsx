@@ -351,20 +351,26 @@ export default function VenuesScreen() {
     const handleOpenMap = (venue: Venue) => {
         let mapUrl = '';
 
-        // Try to get URL from geocoded data
-        try {
-            if (venue.geocoded_data) {
-                const geocodedData = typeof venue.geocoded_data === 'string'
-                    ? JSON.parse(venue.geocoded_data)
-                    : venue.geocoded_data;
+        // First try: Use lat/lon coordinates if available
+        if ((venue as any).lat && (venue as any).lon) {
+            mapUrl = `https://www.google.com/maps/search/?api=1&query=${(venue as any).lat},${(venue as any).lon}`;
+        }
+        // Second try: Extract lat/lon from geocoded data
+        else {
+            try {
+                if (venue.geocoded_data) {
+                    const geocodedData = typeof venue.geocoded_data === 'string'
+                        ? JSON.parse(venue.geocoded_data)
+                        : venue.geocoded_data;
 
-                // Google Maps URL from place_id
-                if (geocodedData.place_id) {
-                    mapUrl = `https://www.google.com/maps/place/?q=place_id:${geocodedData.place_id}`;
+                    // Use lat/lng from geometry if available
+                    if (geocodedData.geometry?.location?.lat && geocodedData.geometry?.location?.lng) {
+                        mapUrl = `https://www.google.com/maps/search/?api=1&query=${geocodedData.geometry.location.lat},${geocodedData.geometry.location.lng}`;
+                    }
                 }
+            } catch (e) {
+                console.warn('Failed to parse geocoded_data:', e);
             }
-        } catch (e) {
-            console.warn('Failed to parse geocoded_data:', e);
         }
 
         // Fallback: generic search with address

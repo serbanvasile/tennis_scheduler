@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 // Import new Types. Player is aliased to Member in types.ts
 import { Member, Team, Venue, TennisEvent, Player } from '../types';
+import { API_CONFIG } from '../config/api';
 
 let SQLite: any;
 
@@ -14,7 +15,7 @@ if (Platform.OS !== 'web') {
 class DatabaseService {
   private db: any = null;
   private isWeb = Platform.OS === 'web';
-  private API_URL = 'http://localhost:3001/api';
+  private API_URL = API_CONFIG.BASE_URL;
 
   async init(forceDatabase = false): Promise<void> {
     if (this.isWeb && !forceDatabase) {

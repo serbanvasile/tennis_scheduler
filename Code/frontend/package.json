@@ -4,11 +4,11 @@
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
-    "start": "cross-env NODE_OPTIONS=--no-deprecation expo start",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation expo start --tunnel --clear",
     "android": "cross-env NODE_OPTIONS=--no-deprecation expo run:android",
     "ios": "cross-env NODE_OPTIONS=--no-deprecation expo run:ios",
-    "web": "cross-env NODE_OPTIONS=--no-deprecation expo start --web",
-    "restart": "cross-env NODE_OPTIONS=--no-deprecation expo start",
+    "web": "cross-env NODE_OPTIONS=--no-deprecation expo start --web --lan",
+    "restart": "cross-env NODE_OPTIONS=--no-deprecation expo start --tunnel --clear",
     "test": "cross-env NODE_OPTIONS=--no-deprecation jest",
     "lint": "eslint . || true"
   },

@@ -262,7 +262,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
             {
               first_name: firstName,
               last_name: lastName,
-              display_name: member.displayName,
+              display_name: firstName, // Default display name to first name only
               gender: member.gender,
               dominant_side: member.handed,
               share: member.sharePercentage,
@@ -286,16 +286,14 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
       setImportResults(results);
 
       if (errors.length > 0) {
+        // Errors occurred - stay on import screen and display errors
         Alert.alert(
-          'Import Completed with Warnings',
-          `Imported: ${results.imported}, Errors: ${errors.length}\n\nCheck console for error details.`
+          'Import Completed with Errors',
+          `Imported: ${results.imported} members\nErrors: ${errors.length}\n\nErrors:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...and ${errors.length - 5} more` : ''}`
         );
       } else {
-        Alert.alert(
-          'Import Successful',
-          `Imported: ${results.imported} members`,
-          [{ text: 'OK', onPress: onImportComplete }]
-        );
+        // All successful - close import screen and refresh member list
+        onImportComplete();
       }
     } catch (error) {
       console.error('Import error:', error);

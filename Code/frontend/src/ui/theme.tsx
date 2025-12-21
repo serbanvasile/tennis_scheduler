@@ -1,16 +1,26 @@
 import React from 'react';
-import { ColorValue, Dimensions } from 'react-native';
+import { ColorValue, Dimensions, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Storage key for persisting theme index
 const THEME_INDEX_STORAGE_KEY = '@theme_index';
 
 // Max content width for modals and forms
-const getResponsiveWidth = () => {
-  if (typeof window !== 'undefined') {
-    return window.innerWidth <= 768 ? '95%' : '50%';
+// Uses device type instead of resolution - phones/tablets get full width, desktop gets constrained width
+const getResponsiveWidth = (): string => {
+  // Mobile devices (iOS/Android) always get full width
+  if (Platform.OS === 'ios' || Platform.OS === 'android') {
+    return '100%';
   }
-  return '50%';
+  // Web: use viewport width to determine if it's mobile browser or desktop
+  if (typeof window !== 'undefined') {
+    // Use a more conservative breakpoint and check for touch capability
+    const isMobileWeb = window.innerWidth <= 768 ||
+      ('ontouchstart' in window) ||
+      (navigator.maxTouchPoints > 0);
+    return isMobileWeb ? '100%' : '60%';
+  }
+  return '60%';
 };
 export const MAX_CONTENT_WIDTH = getResponsiveWidth();
 

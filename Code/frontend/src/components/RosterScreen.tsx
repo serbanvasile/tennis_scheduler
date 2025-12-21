@@ -437,8 +437,8 @@ export default function RosterScreen() {
               {item.teams.map((t: any, idx: number) => (
                 <View key={idx}>
                   <Text style={{ color: theme.colors.primary, fontSize: 14, marginTop: 2 }}>
-                    <Text style={{ fontWeight: 'bold' }}>{t.sport_name}</Text>
-                    <Text style={{ fontWeight: 'normal' }}> • {t.team_name}</Text>
+                    <Text style={{ fontWeight: 'bold' }}>{t.sport_name?.toUpperCase()} • </Text>
+                    <Text style={{ fontWeight: 'normal' }}>{t.team_name}</Text>
                   </Text>
                   <View style={{ marginTop: 4 }}>
                     <Text style={{ color: theme.colors.muted, fontSize: 12 }}>
@@ -545,89 +545,94 @@ export default function RosterScreen() {
                     <Text style={[styles.label, { color: theme.colors.text }]}>Display Name (Optional)</Text>
                     <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]} value={displayName} onChangeText={setDisplayName} />
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 24, flexWrap: 'wrap' }}>
-                    {/* Left Column: Gender and Share Type */}
-                    <View style={{ flex: 1, minWidth: 140 }}>
-                      <Text style={[styles.label, { color: theme.colors.text }]}>Gender</Text>
-                      <View style={styles.chipContainer}>
-                        {[{ value: 'M', label: 'Male' }, { value: 'F', label: 'Female' }, { value: 'U', label: 'Unknown' }].map(opt => {
-                          const isSelected = gender === opt.value;
-                          return (
-                            <TouchableOpacity
-                              key={opt.value}
-                              style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                              onPress={() => setGender(opt.value)}
-                            >
-                              <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
 
-                      <Text style={[styles.label, { color: theme.colors.text, marginTop: 16 }]}>Share Type</Text>
-                      <View style={styles.chipContainer}>
-                        {[['R', 'OQ', 'OT', 'H'], ['TT', 'TQ', 'F', 'C']].map((row, rowIdx) => (
-                          <View key={rowIdx} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                            {row.map(type => {
-                              const isSelected = shareType === type;
-                              return (
-                                <TouchableOpacity
-                                  key={type}
-                                  style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                                  onPress={() => {
-                                    setShareType(type);
-                                    // Auto-fill share value
-                                    const defaultValue = SHARE_TYPE_MAP[type];
-                                    if (defaultValue >= 0) {
-                                      setShare(defaultValue.toString());
-                                    }
-                                  }}
-                                >
-                                  <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </View>
-                        ))}
-                      </View>
+                  {/* Gender */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Gender</Text>
+                    <View style={styles.chipContainer}>
+                      {[{ value: 'M', label: 'Male' }, { value: 'F', label: 'Female' }, { value: 'U', label: 'Unknown' }].map(opt => {
+                        const isSelected = gender === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => setGender(opt.value)}
+                          >
+                            <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
+                  </View>
 
-                    {/* Right Column: Dominant Side and Share (%) */}
-                    <View style={{ flex: 1, minWidth: 140, marginLeft: 30 }}>
-                      <Text style={[styles.label, { color: theme.colors.text }]}>Dominant Side</Text>
-                      <View style={styles.chipContainer}>
-                        {[{ value: 'R', label: 'Right' }, { value: 'L', label: 'Left' }, { value: 'A', label: 'Ambidextrous' }].map(opt => {
-                          const isSelected = dominantSide === opt.value;
-                          return (
-                            <TouchableOpacity
-                              key={opt.value}
-                              style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                              onPress={() => setDominantSide(opt.value)}
-                            >
-                              <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-
-                      <Text style={[styles.label, { color: theme.colors.text, marginTop: 16 }]}>Share (%)</Text>
-                      <TextInput
-                        style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 120 }]}
-                        value={share}
-                        onChangeText={val => {
-                          setShare(val);
-                          // Auto-switch to Custom if value doesn't match any predefined type
-                          const numVal = parseFloat(val);
-                          if (!isNaN(numVal)) {
-                            const matchedType = getShareTypeFromValue(numVal);
-                            setShareType(matchedType);
-                          }
-                        }}
-                        keyboardType="decimal-pad"
-                        placeholder="0"
-                        placeholderTextColor={theme.colors.muted}
-                      />
+                  {/* Dominant Side */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Dominant Side</Text>
+                    <View style={styles.chipContainer}>
+                      {[{ value: 'R', label: 'Right' }, { value: 'L', label: 'Left' }, { value: 'A', label: 'Ambidextrous' }].map(opt => {
+                        const isSelected = dominantSide === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => setDominantSide(opt.value)}
+                          >
+                            <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
+                  </View>
+
+                  {/* Share Type */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Share Type</Text>
+                    <View style={styles.chipContainer}>
+                      {[['R', 'OQ', 'OT', 'H'], ['TT', 'TQ', 'F', 'C']].map((row, rowIdx) => (
+                        <View key={rowIdx} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {row.map(type => {
+                            const isSelected = shareType === type;
+                            return (
+                              <TouchableOpacity
+                                key={type}
+                                style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                onPress={() => {
+                                  setShareType(type);
+                                  // Auto-fill share value
+                                  const defaultValue = SHARE_TYPE_MAP[type];
+                                  if (defaultValue >= 0) {
+                                    setShare(defaultValue.toString());
+                                  }
+                                }}
+                              >
+                                <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Share (%) */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Share (%)</Text>
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 120 }]}
+                      value={share}
+                      onChangeText={val => {
+                        setShare(val);
+                        // Auto-switch to Custom if value doesn't match any predefined type
+                        const numVal = parseFloat(val);
+                        if (!isNaN(numVal)) {
+                          const matchedType = getShareTypeFromValue(numVal);
+                          setShareType(matchedType);
+                        }
+                      }}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor={theme.colors.muted}
+                    />
                   </View>
                 </>
               ) : activeTab === 'Teams' ? (
@@ -675,11 +680,16 @@ export default function RosterScreen() {
                     if (!team) return null;
 
                     const sportId = team.sport_id;
+                    const sport = allSports.find(s => s.sport_id === sportId);
+                    const sportName = sport?.name || 'Unknown Sport';
                     const relevantPositions = allPositions.filter(p => !p.sport_id || p.sport_id === sportId);
 
                     return (
                       <View key={mt.teamId} style={[styles.teamDetailCard, { borderColor: theme.colors.border, marginLeft: 16, marginTop: 8, borderTopWidth: 1, paddingTop: 8 }]}>
-                        <Text style={[styles.teamDetailTitle, { color: theme.colors.primary }]}>{team.name} Settings</Text>
+                        <Text style={[styles.teamDetailTitle, { color: theme.colors.primary }]}>
+                          <Text style={{ fontWeight: 'bold' }}>{sportName.toUpperCase()} • </Text>
+                          {team.name}
+                        </Text>
 
                         <Text style={[styles.label, { color: theme.colors.text }]}>Roles:</Text>
                         <View style={styles.chipContainer}>
@@ -860,7 +870,7 @@ export default function RosterScreen() {
                   setModalVisible(true);
                 }}
               >
-                <Text style={styles.choiceButtonText}>Add Manually</Text>
+                <Text style={[styles.choiceButtonText, { color: theme.colors.buttonText }]}>Manual</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.choiceButton, { backgroundColor: theme.colors.primary }]}
@@ -869,7 +879,7 @@ export default function RosterScreen() {
                   handleImportClick();
                 }}
               >
-                <Text style={styles.choiceButtonText}>Import Excel</Text>
+                <Text style={[styles.choiceButtonText, { color: theme.colors.buttonText }]}>Import</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1005,9 +1015,9 @@ const styles = StyleSheet.create({
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  modalContainer: { width: '90%', maxWidth: MAX_CONTENT_WIDTH, maxHeight: '90%', borderRadius: 12, padding: 20, borderWidth: 1 },
+  modalContainer: { width: '100%', maxWidth: MAX_CONTENT_WIDTH, maxHeight: '90%', borderRadius: 12, padding: 20, borderWidth: 1, display: 'flex', flexDirection: 'column' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
-  modalContent: { flex: 1 },
+  modalContent: { flexGrow: 1, flexShrink: 1, minHeight: 200 },
 
   // Use common styles (imported from commonStyles)
   tabContainer: commonStyles.tabContainer,
@@ -1086,6 +1096,10 @@ const styles = StyleSheet.create({
   choiceButtonText: {
     fontSize: 16,
     color: 'white',
+    fontWeight: 'bold',
+  },
+  sportValue: {
+    fontSize: 14,
     fontWeight: 'bold',
   },
 });

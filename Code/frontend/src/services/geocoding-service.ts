@@ -1,4 +1,5 @@
 import { debounce } from 'lodash';
+import { API_CONFIG } from '../config/api';
 
 export interface GeocodingResult {
     place_id: string;
@@ -20,7 +21,7 @@ export const GeocodingService = {
 
         try {
             // Call our backend proxy to avoid CORS issues
-            const url = `http://localhost:3001/api/geocode?q=${encodeURIComponent(query)}`;
+            const url = API_CONFIG.url(`/geocode?q=${encodeURIComponent(query)}`);
 
             console.log('[GeocodingService] Calling backend proxy...');
             const response = await fetch(url);

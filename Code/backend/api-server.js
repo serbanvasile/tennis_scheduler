@@ -5,7 +5,8 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all network interfaces
 
 // Middleware
 app.use(cors());
@@ -2612,6 +2613,9 @@ process.on('SIGINT', () => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend running on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Backend running on http://${HOST}:${PORT}`);
+  if (HOST === '0.0.0.0') {
+    console.log(`  → Accessible from local network at http://<your-lan-ip>:${PORT}`);
+  }
 });

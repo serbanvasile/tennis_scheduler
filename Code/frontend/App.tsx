@@ -171,7 +171,7 @@ function AppContent() {
         <NavigationContainer theme={theme.name === 'dark' ? DarkTheme : DefaultTheme}>
           <Tab.Navigator
             screenOptions={{
-              headerStyle: { backgroundColor: theme.colors.surface, height: 50 },
+              headerStyle: { backgroundColor: theme.colors.surface, height: 65 },
               headerTintColor: theme.colors.text,
               headerTitle: () => null,
               headerLeft: () => <DateTimeHeader />,
