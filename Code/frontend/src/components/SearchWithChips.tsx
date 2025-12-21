@@ -82,13 +82,13 @@ export function SearchWithChips({
                                 }
                             ]}
                         >
-                            <Text style={styles.chipText}>{chip}</Text>
+                            <Text style={[styles.chipText, { color: theme.colors.buttonText }]}>{chip}</Text>
                             <TouchableOpacity
                                 onPress={() => handleRemoveChip(chip)}
                                 style={styles.chipRemove}
                                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             >
-                                <Text style={styles.chipRemoveText}>×</Text>
+                                <Text style={[styles.chipRemoveText, { color: theme.colors.buttonText }]}>×</Text>
                             </TouchableOpacity>
                         </View>
                     ))}
@@ -137,7 +137,7 @@ export function SearchWithChips({
                             <Text style={[
                                 styles.modeChipText,
                                 { color: theme.colors.text },
-                                mode === 'AND' && { color: 'black', fontWeight: 'bold' }
+                                mode === 'AND' && { color: theme.colors.buttonText, fontWeight: 'bold' }
                             ]}>
                                 AND
                             </Text>
@@ -153,7 +153,7 @@ export function SearchWithChips({
                             <Text style={[
                                 styles.modeChipText,
                                 { color: theme.colors.text },
-                                mode === 'OR' && { color: 'black', fontWeight: 'bold' }
+                                mode === 'OR' && { color: theme.colors.buttonText, fontWeight: 'bold' }
                             ]}>
                                 OR
                             </Text>
@@ -268,7 +268,6 @@ const styles = StyleSheet.create({
         borderWidth: 1
     },
     chipText: {
-        color: 'black',
         fontSize: 14,
         fontWeight: '600',
         marginRight: 4
@@ -282,7 +281,6 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     chipRemoveText: {
-        color: 'black',
         fontSize: 16,
         fontWeight: 'bold',
         lineHeight: 18

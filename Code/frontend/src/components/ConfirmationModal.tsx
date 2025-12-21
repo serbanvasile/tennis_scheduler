@@ -41,10 +41,10 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.button, { backgroundColor: isDestructive ? '#d9534f' : theme.colors.primary }]}
+                            style={[styles.button, { backgroundColor: isDestructive ? theme.colors.error : theme.colors.primary }]}
                             onPress={onConfirm}
                         >
-                            <Text style={[styles.buttonText, { color: isDestructive ? 'white' : 'black', fontWeight: 'bold' }]}>
+                            <Text style={[styles.buttonText, { color: isDestructive ? theme.colors.errorText : theme.colors.buttonText, fontWeight: 'bold' }]}>
                                 {confirmLabel}
                             </Text>
                         </TouchableOpacity>

@@ -26,30 +26,13 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function DashboardScreen({ navigation }: any) {
-  const { theme, setThemeName } = useTheme();
+  const { theme } = useTheme();
   useEffect(() => {
     navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={() => setThemeName(theme.name === 'light' ? 'dark' : 'light')}
-          style={{
-            padding: 6,
-            borderRadius: 16,
-            marginRight: 8,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'transparent'
-          }}
-          accessibilityLabel="Toggle theme"
-        >
-          <Text style={{ fontSize: 18, color: theme.colors.text }}>{theme.name === 'light' ? '🌙' : '☀️'}</Text>
-        </TouchableOpacity>
-      ),
       headerStyle: { backgroundColor: theme.colors.surface },
       headerTintColor: theme.colors.text,
-      headerRightContainerStyle: { paddingRight: 8 }
     });
-  }, [navigation, theme.name]);
+  }, [navigation, theme]);
   const weeks = useStore((s) => s.weeks);
   const league = useStore((s) => s.league);
   const generateWeek = useStore((s) => s.generateWeek);
@@ -63,20 +46,16 @@ function DashboardScreen({ navigation }: any) {
         title="Create Next Week"
         onPress={() => generateWeek(weeks.length)}
       />
-      <View style={{ height: 12 }} />
-      <Button
-        title={theme.name === 'light' ? 'Switch to Dark' : 'Switch to Light'}
-        onPress={() => setThemeName(theme.name === 'light' ? 'dark' : 'light')}
-      />
       {latest && (
         <Text style={{ marginTop: 16, color: theme.colors.text }}>
           Last week: {new Date(latest.dateISO).toDateString()}
         </Text>
       )}
-      <StatusBar style={theme.name === 'dark' ? "light" : "dark"} />
+      <StatusBar style="light" />
     </SafeAreaView>
   );
 }
+
 
 function WeeksListScreen({ navigation }: any) {
   const weeks = useStore((s) => s.weeks);
@@ -161,18 +140,8 @@ function WeeksStack() {
   );
 }
 
-function ThemeToggle() {
-  const { theme, setThemeName } = useTheme();
-  return (
-    <TouchableOpacity
-      onPress={() => setThemeName(theme.name === 'light' ? 'dark' : 'light')}
-      style={{ padding: 6, marginRight: 16 }}
-      accessibilityLabel="Toggle theme"
-    >
-      <Text style={{ fontSize: 18, color: theme.colors.text }}>{theme.name === 'light' ? '🌙' : '☀️'}</Text>
-    </TouchableOpacity>
-  );
-}
+// ColorSlider is now used for theme customization
+import { ColorSlider } from "./src/components/ColorSlider";
 
 function DateTimeHeader() {
   const { theme } = useTheme();
@@ -206,7 +175,7 @@ function AppContent() {
               headerTintColor: theme.colors.text,
               headerTitle: () => null,
               headerLeft: () => <DateTimeHeader />,
-              headerRight: () => <ThemeToggle />,
+              headerRight: () => <ColorSlider />,
               tabBarStyle: {
                 backgroundColor: theme.colors.surface,
                 borderTopColor: theme.colors.background,

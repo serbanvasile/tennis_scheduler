@@ -378,7 +378,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
               />
 
               <TouchableOpacity style={[styles.parseButton, { backgroundColor: theme.colors.primary }]} onPress={handleParseData}>
-                <Text style={styles.parseButtonText}>Parse Data</Text>
+                <Text style={[styles.parseButtonText, { color: theme.colors.buttonText }]}>Parse Data</Text>
               </TouchableOpacity>
             </View>
 
@@ -410,7 +410,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
                       >
                         <Text style={[
                           { color: theme.colors.text },
-                          selectedTeamId === team.team_id && { color: 'black', fontWeight: 'bold' }
+                          selectedTeamId === team.team_id && { color: theme.colors.buttonText, fontWeight: 'bold' }
                         ]}>
                           {sport?.name || 'Unknown'} • {team.name}
                         </Text>
@@ -434,7 +434,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
                     >
                       <Text style={[
                         { color: theme.colors.text },
-                        selectedRoleIds.includes(role.role_id) && { color: 'black', fontWeight: 'bold' }
+                        selectedRoleIds.includes(role.role_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                       ]}>
                         {role.name}
                       </Text>
@@ -459,7 +459,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
                         >
                           <Text style={[
                             { color: theme.colors.text },
-                            selectedPositionIds.includes(pos.position_id) && { color: 'black', fontWeight: 'bold' }
+                            selectedPositionIds.includes(pos.position_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                           ]}>
                             {pos.name}
                           </Text>
@@ -491,11 +491,11 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
                     <Text style={[
                       styles.modeButtonText,
                       { color: theme.colors.text },
-                      importMode === 'update' && { color: 'black', fontWeight: 'bold' }
+                      importMode === 'update' && { color: theme.colors.buttonText, fontWeight: 'bold' }
                     ]}>
                       Update Existing
                     </Text>
-                    <Text style={[styles.modeHelpText, { color: importMode === 'update' ? 'black' : theme.colors.muted }]}>Update existing members by name, add new ones</Text>
+                    <Text style={[styles.modeHelpText, { color: importMode === 'update' ? theme.colors.buttonText : theme.colors.muted }]}>Update existing members by name, add new ones</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -509,11 +509,11 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
                     <Text style={[
                       styles.modeButtonText,
                       { color: theme.colors.text },
-                      importMode === 'add-new' && { color: 'black', fontWeight: 'bold' }
+                      importMode === 'add-new' && { color: theme.colors.buttonText, fontWeight: 'bold' }
                     ]}>
                       Add New Only
                     </Text>
-                    <Text style={[styles.modeHelpText, { color: importMode === 'add-new' ? 'black' : theme.colors.muted }]}>Always create new members, even if names match</Text>
+                    <Text style={[styles.modeHelpText, { color: importMode === 'add-new' ? theme.colors.buttonText : theme.colors.muted }]}>Always create new members, even if names match</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -565,7 +565,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
                   onPress={handleImport}
                   disabled={isImporting || !canImport}
                 >
-                  <Text style={[styles.importButtonText, { color: canImport ? 'black' : 'white' }]}>
+                  <Text style={[styles.importButtonText, { color: canImport ? theme.colors.buttonText : 'white' }]}>
                     {isImporting
                       ? 'Importing...'
                       : importResults
@@ -638,7 +638,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   parseButtonText: {
-    color: 'black',
     fontSize: 16,
     fontWeight: '600',
   },

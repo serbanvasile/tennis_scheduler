@@ -229,8 +229,8 @@ export default function TeamsScreen() {
             onPress={() => handleEdit(item)}
         >
             <View style={styles.cardContent}>
-                <View style={[styles.logoPlaceholder, { backgroundColor: 'black', borderWidth: 1, borderColor: theme.colors.primary }]}>
-                    <Text style={[styles.logoText, { color: theme.colors.primary }]}>{item.name.charAt(0)}</Text>
+                <View style={[styles.logoPlaceholder, { backgroundColor: theme.colors.chipBackground, borderWidth: 1, borderColor: theme.colors.primary }]}>
+                    <Text style={[styles.logoText, { color: theme.colors.chipText }]}>{item.name.charAt(0)}</Text>
                 </View>
                 <View style={styles.textContainer}>
                     <Text style={[styles.teamName, { color: theme.colors.text }]}>{item.name}</Text>
@@ -261,8 +261,8 @@ export default function TeamsScreen() {
                 title="Teams"
                 rightAction={
                     <View style={{ flexDirection: 'row', gap: 10 }}>
-                        <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
-                            <Text style={styles.buttonTextWhite}>
+                        <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: theme.colors.error }]} onPress={promptDeleteAll}>
+                            <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>
                                 {searchChips.length > 0
                                     ? `Delete Filtered (${filterItemsByChips(
                                         teams,
@@ -274,7 +274,7 @@ export default function TeamsScreen() {
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => { resetForm(); setModalVisible(true); }}>
-                            <Text style={styles.addButtonText}>New Team</Text>
+                            <Text style={[styles.addButtonText, { color: theme.colors.buttonText }]}>New Team</Text>
                         </TouchableOpacity>
                     </View>
                 }
@@ -351,7 +351,7 @@ export default function TeamsScreen() {
                                         <Text style={[
                                             styles.chipText,
                                             { color: theme.colors.text },
-                                            selectedSportId === s.sport_id && { color: 'black', fontWeight: 'bold' }
+                                            selectedSportId === s.sport_id && { color: theme.colors.buttonText, fontWeight: 'bold' }
                                         ]}>{s.name}</Text>
                                     </TouchableOpacity>
                                 ))}
@@ -394,8 +394,8 @@ export default function TeamsScreen() {
 
                         <View style={[styles.modalButtons, { justifyContent: 'space-between' }]}>
                             {editingTeamId ? (
-                                <TouchableOpacity style={[styles.deleteButton, { backgroundColor: '#d9534f' }]} onPress={promptDeleteTeam}>
-                                    <Text style={styles.buttonTextWhite}>Delete</Text>
+                                <TouchableOpacity style={[styles.deleteButton, { backgroundColor: theme.colors.error }]} onPress={promptDeleteTeam}>
+                                    <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>Delete</Text>
                                 </TouchableOpacity>
                             ) : (
                                 <View style={{ flex: 1 }} /> // Spacer
@@ -406,7 +406,7 @@ export default function TeamsScreen() {
                                     <Text style={[styles.buttonText, { color: theme.colors.text }]}>Cancel</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.colors.primary }]} onPress={handleSave}>
-                                    <Text style={styles.saveButtonText}>{editingTeamId ? 'Save Changes' : 'Create Team'}</Text>
+                                    <Text style={[styles.saveButtonText, { color: theme.colors.buttonText }]}>{editingTeamId ? 'Save Changes' : 'Create Team'}</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     },
     title: { fontSize: 24, fontWeight: 'bold' },
     addButton: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
-    addButtonText: { color: 'black', fontWeight: 'bold' },
+    addButtonText: { fontWeight: 'bold' },
     list: { paddingHorizontal: 16, paddingBottom: 15 },
 
     card: {
@@ -483,5 +483,5 @@ const styles = StyleSheet.create({
     deleteButtonHeader: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, marginRight: 8 },
     buttonText: { fontWeight: '600' },
     buttonTextWhite: { color: 'white', fontWeight: 'bold' },
-    saveButtonText: { color: 'black', fontWeight: 'bold' }
+    saveButtonText: { fontWeight: 'bold' }
 });

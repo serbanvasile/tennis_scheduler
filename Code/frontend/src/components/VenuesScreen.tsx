@@ -475,17 +475,17 @@ export default function VenuesScreen() {
                                 <View style={{ flexDirection: 'row', gap: 8 }}>
                                     {item.courts.length > 0 && (
                                         <TouchableOpacity
-                                            style={[styles.deleteAllBtn, { backgroundColor: '#d9534f' }]}
+                                            style={[styles.deleteAllBtn, { backgroundColor: theme.colors.error }]}
                                             onPress={() => handleDeleteAllCourts(item.venue_id, item.courts.length)}
                                         >
-                                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Delete All</Text>
+                                            <Text style={{ color: theme.colors.errorText, fontWeight: 'bold', fontSize: 12 }}>Delete All</Text>
                                         </TouchableOpacity>
                                     )}
                                     <TouchableOpacity
                                         style={[styles.addResourceBtn, { backgroundColor: theme.colors.primary }]}
                                         onPress={() => handleAddResource(item.venue_id, 'court')}
                                     >
-                                        <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>+ Court</Text>
+                                        <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold', fontSize: 12 }}>+ Court</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -512,17 +512,17 @@ export default function VenuesScreen() {
                                 <View style={{ flexDirection: 'row', gap: 8 }}>
                                     {item.fields.length > 0 && (
                                         <TouchableOpacity
-                                            style={[styles.deleteAllBtn, { backgroundColor: '#d9534f' }]}
+                                            style={[styles.deleteAllBtn, { backgroundColor: theme.colors.error }]}
                                             onPress={() => handleDeleteAllFields(item.venue_id, item.fields.length)}
                                         >
-                                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Delete All</Text>
+                                            <Text style={{ color: theme.colors.errorText, fontWeight: 'bold', fontSize: 12 }}>Delete All</Text>
                                         </TouchableOpacity>
                                     )}
                                     <TouchableOpacity
                                         style={[styles.addResourceBtn, { backgroundColor: theme.colors.primary }]}
                                         onPress={() => handleAddResource(item.venue_id, 'field')}
                                     >
-                                        <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>+ Field</Text>
+                                        <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold', fontSize: 12 }}>+ Field</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -548,13 +548,13 @@ export default function VenuesScreen() {
                                 style={[styles.actionBtn, { backgroundColor: theme.colors.primary }]}
                                 onPress={() => handleEditVenue(item)}
                             >
-                                <Text style={{ color: 'black', fontWeight: 'bold' }}>Edit Venue</Text>
+                                <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold' }}>Edit Venue</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.actionBtn, { backgroundColor: '#d9534f' }]}
+                                style={[styles.actionBtn, { backgroundColor: theme.colors.error }]}
                                 onPress={() => promptDeleteVenue(item)}
                             >
-                                <Text style={{ color: 'white', fontWeight: 'bold' }}>Delete Venue</Text>
+                                <Text style={{ color: theme.colors.errorText, fontWeight: 'bold' }}>Delete Venue</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -569,8 +569,8 @@ export default function VenuesScreen() {
                 title="Venues"
                 rightAction={
                     <View style={{ flexDirection: 'row', gap: 10 }}>
-                        <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
-                            <Text style={styles.buttonTextWhite}>
+                        <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: theme.colors.error }]} onPress={promptDeleteAll}>
+                            <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>
                                 {searchChips.length > 0
                                     ? `Delete Filtered (${filterItemsByChips(
                                         venues,
@@ -582,7 +582,7 @@ export default function VenuesScreen() {
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.headerBtn, { backgroundColor: theme.colors.primary }]} onPress={handleAddVenue}>
-                            <Text style={{ color: 'black', fontWeight: 'bold' }}>New Venue</Text>
+                            <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold' }}>New Venue</Text>
                         </TouchableOpacity>
                     </View>
                 }
@@ -652,7 +652,7 @@ export default function VenuesScreen() {
                                 onPress={handleSearch}
                                 disabled={searchLoading || !searchQuery.trim()}
                             >
-                                <Text style={{ color: 'black', fontWeight: 'bold' }}>{searchLoading ? '...' : 'Search'}</Text>
+                                <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold' }}>{searchLoading ? '...' : 'Search'}</Text>
                             </TouchableOpacity>
                         </View>
 
@@ -697,7 +697,7 @@ export default function VenuesScreen() {
                                 <Text style={{ color: theme.colors.text }}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.colors.primary }]} onPress={handleSaveVenue}>
-                                <Text style={{ color: 'black', fontWeight: 'bold' }}>{editingVenue?.venue_id ? 'Save' : 'Create'}</Text>
+                                <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold' }}>{editingVenue?.venue_id ? 'Save' : 'Create'}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -719,13 +719,13 @@ export default function VenuesScreen() {
                                     style={[styles.modeBtn, { borderColor: theme.colors.border }, !bulkMode && { backgroundColor: theme.colors.primary }]}
                                     onPress={() => setBulkMode(false)}
                                 >
-                                    <Text style={[{ color: theme.colors.text }, !bulkMode && { color: 'black', fontWeight: 'bold' }]}>Single</Text>
+                                    <Text style={[{ color: theme.colors.text }, !bulkMode && { color: theme.colors.buttonText, fontWeight: 'bold' }]}>Single</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.modeBtn, { borderColor: theme.colors.border }, bulkMode && { backgroundColor: theme.colors.primary }]}
                                     onPress={() => setBulkMode(true)}
                                 >
-                                    <Text style={[{ color: theme.colors.text }, bulkMode && { color: 'black', fontWeight: 'bold' }]}>Bulk Create</Text>
+                                    <Text style={[{ color: theme.colors.text }, bulkMode && { color: theme.colors.buttonText, fontWeight: 'bold' }]}>Bulk Create</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -773,8 +773,8 @@ export default function VenuesScreen() {
 
                         <View style={styles.modalButtons}>
                             {editingResource?.item && (
-                                <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: '#d9534f' }]} onPress={handleDeleteResource}>
-                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Delete</Text>
+                                <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: theme.colors.error }]} onPress={handleDeleteResource}>
+                                    <Text style={{ color: theme.colors.errorText, fontWeight: 'bold' }}>Delete</Text>
                                 </TouchableOpacity>
                             )}
                             <View style={{ flex: 1 }} />
@@ -782,7 +782,7 @@ export default function VenuesScreen() {
                                 <Text style={{ color: theme.colors.text }}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.colors.primary }]} onPress={handleSaveResource}>
-                                <Text style={{ color: 'black', fontWeight: 'bold' }}>{editingResource?.item ? 'Save' : 'Create'}</Text>
+                                <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold' }}>{editingResource?.item ? 'Save' : 'Create'}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

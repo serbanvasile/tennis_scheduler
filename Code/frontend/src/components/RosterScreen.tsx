@@ -425,8 +425,8 @@ export default function RosterScreen() {
   const renderMemberCard = ({ item }: { item: Member }) => (
     <TouchableOpacity style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} onPress={() => handleEdit(item)}>
       <View style={styles.cardContent}>
-        <View style={[styles.avatar, { backgroundColor: 'black', borderWidth: 1, borderColor: theme.colors.primary }]}>
-          <Text style={[styles.avatarText, { color: theme.colors.primary }]}>{item.first_name[0]}{item.last_name[0]}</Text>
+        <View style={[styles.avatar, { backgroundColor: theme.colors.chipBackground, borderWidth: 1, borderColor: theme.colors.primary }]}>
+          <Text style={[styles.avatarText, { color: theme.colors.chipText }]}>{item.first_name[0]}{item.last_name[0]}</Text>
         </View>
         <View style={styles.textContainer}>
           <Text style={[styles.nameText, { color: theme.colors.text }]}>
@@ -467,8 +467,8 @@ export default function RosterScreen() {
         title="Roster"
         rightAction={
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
-              <Text style={styles.buttonTextWhite}>
+            <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: theme.colors.error }]} onPress={promptDeleteAll}>
+              <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>
                 {searchChips.length > 0
                   ? `Delete Filtered (${filterItemsByChips(
                     members,
@@ -480,7 +480,7 @@ export default function RosterScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => setAddMemberChoiceVisible(true)}>
-              <Text style={styles.addButtonText}>New Member</Text>
+              <Text style={[styles.addButtonText, { color: theme.colors.buttonText }]}>New Member</Text>
             </TouchableOpacity>
           </View>
         }
@@ -545,9 +545,9 @@ export default function RosterScreen() {
                     <Text style={[styles.label, { color: theme.colors.text }]}>Display Name (Optional)</Text>
                     <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]} value={displayName} onChangeText={setDisplayName} />
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 24, flexWrap: 'wrap' }}>
                     {/* Left Column: Gender and Share Type */}
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 140 }}>
                       <Text style={[styles.label, { color: theme.colors.text }]}>Gender</Text>
                       <View style={styles.chipContainer}>
                         {[{ value: 'M', label: 'Male' }, { value: 'F', label: 'Female' }, { value: 'U', label: 'Unknown' }].map(opt => {
@@ -558,7 +558,7 @@ export default function RosterScreen() {
                               style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
                               onPress={() => setGender(opt.value)}
                             >
-                              <Text style={{ color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
+                              <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
                             </TouchableOpacity>
                           );
                         })}
@@ -583,7 +583,7 @@ export default function RosterScreen() {
                                     }
                                   }}
                                 >
-                                  <Text style={{ color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
+                                  <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
                                 </TouchableOpacity>
                               );
                             })}
@@ -593,7 +593,7 @@ export default function RosterScreen() {
                     </View>
 
                     {/* Right Column: Dominant Side and Share (%) */}
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 140, marginLeft: 30 }}>
                       <Text style={[styles.label, { color: theme.colors.text }]}>Dominant Side</Text>
                       <View style={styles.chipContainer}>
                         {[{ value: 'R', label: 'Right' }, { value: 'L', label: 'Left' }, { value: 'A', label: 'Ambidextrous' }].map(opt => {
@@ -604,7 +604,7 @@ export default function RosterScreen() {
                               style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
                               onPress={() => setDominantSide(opt.value)}
                             >
-                              <Text style={{ color: isSelected ? 'black' : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
+                              <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
                             </TouchableOpacity>
                           );
                         })}
@@ -656,7 +656,7 @@ export default function RosterScreen() {
                           <Text
                             style={[
                               styles.chipText,
-                              { color: isSelected ? 'black' : theme.colors.text },
+                              { color: isSelected ? theme.colors.buttonText : theme.colors.text },
                               isSelected && { fontWeight: 'bold' }
                             ]}
                             numberOfLines={2}
@@ -694,7 +694,7 @@ export default function RosterScreen() {
                                 <Text
                                   style={[
                                     styles.chipText,
-                                    { color: active ? 'black' : theme.colors.text },
+                                    { color: active ? theme.colors.buttonText : theme.colors.text },
                                     active && { fontWeight: 'bold' }
                                   ]}
                                 >
@@ -718,7 +718,7 @@ export default function RosterScreen() {
                                 <Text
                                   style={[
                                     styles.chipText,
-                                    { color: active ? 'black' : theme.colors.text },
+                                    { color: active ? theme.colors.buttonText : theme.colors.text },
                                     active && { fontWeight: 'bold' }
                                   ]}
                                 >
@@ -750,7 +750,7 @@ export default function RosterScreen() {
                                   <Text
                                     style={[
                                       styles.chipText,
-                                      { color: active ? 'black' : theme.colors.text },
+                                      { color: active ? theme.colors.buttonText : theme.colors.text },
                                       active && { fontWeight: 'bold' }
                                     ]}
                                   >
@@ -783,7 +783,7 @@ export default function RosterScreen() {
                         onPress={() => setMemberContacts(memberContacts.filter((_, i) => i !== index))}
                         style={{ padding: 8 }}
                       >
-                        <Text style={{ color: '#d9534f', fontWeight: 'bold' }}>Remove</Text>
+                        <Text style={{ color: theme.colors.error, fontWeight: 'bold' }}>Remove</Text>
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -797,7 +797,7 @@ export default function RosterScreen() {
                     style={[styles.saveButton, { backgroundColor: theme.colors.primary, alignSelf: 'flex-start' }]}
                     onPress={() => setAddContactModalVisible(true)}
                   >
-                    <Text style={styles.buttonTextBold}>Add Contact</Text>
+                    <Text style={[styles.buttonTextBold, { color: theme.colors.buttonText }]}>Add Contact</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -805,14 +805,14 @@ export default function RosterScreen() {
 
             <View style={styles.modalButtons}>
               {editingMemberId ? (
-                <TouchableOpacity style={[styles.deleteButton, { backgroundColor: '#d9534f' }]} onPress={promptDelete}>
-                  <Text style={styles.buttonTextWhite}>Delete</Text>
+                <TouchableOpacity style={[styles.deleteButton, { backgroundColor: theme.colors.error }]} onPress={promptDelete}>
+                  <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>Delete</Text>
                 </TouchableOpacity>
               ) : <View style={{ flex: 1 }} />}
 
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.muted }]} onPress={() => setModalVisible(false)}><Text style={{ color: theme.colors.text }}>Cancel</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.colors.primary }]} onPress={handleSave}><Text style={styles.buttonTextBold}>Save</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.colors.primary }]} onPress={handleSave}><Text style={[styles.buttonTextBold, { color: theme.colors.buttonText }]}>Save</Text></TouchableOpacity>
               </View>
             </View>
           </View>
@@ -898,7 +898,7 @@ export default function RosterScreen() {
                       <Text
                         style={[
                           styles.chipText,
-                          { color: isSelected ? 'black' : theme.colors.text },
+                          { color: isSelected ? theme.colors.buttonText : theme.colors.text },
                           isSelected && { fontWeight: 'bold' }
                         ]}
                       >
@@ -934,7 +934,7 @@ export default function RosterScreen() {
                       <Text
                         style={[
                           styles.chipText,
-                          { color: isSelected ? 'black' : theme.colors.text },
+                          { color: isSelected ? theme.colors.buttonText : theme.colors.text },
                           isSelected && { fontWeight: 'bold' }
                         ]}
                       >
@@ -968,7 +968,7 @@ export default function RosterScreen() {
                     }
                   }}
                 >
-                  <Text style={styles.buttonTextBold}>Add</Text>
+                  <Text style={[styles.buttonTextBold, { color: theme.colors.buttonText }]}>Add</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -999,7 +999,7 @@ const styles = StyleSheet.create({
   nameText: { fontSize: 18, fontWeight: 'bold' },
   detailText: { fontSize: 14, marginTop: 2 },
   addButton: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
-  addButtonText: { color: 'black', fontWeight: 'bold' },
+  addButtonText: { fontWeight: 'bold' },
   deleteButtonHeader: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, marginRight: 8 },
   buttonTextWhite: { color: 'white', fontWeight: 'bold' },
 
@@ -1032,7 +1032,7 @@ const styles = StyleSheet.create({
   cancelButton: { padding: 12, borderRadius: 8, borderWidth: 1, minWidth: 80, alignItems: 'center' },
   saveButton: { padding: 12, borderRadius: 8, minWidth: 100, alignItems: 'center' },
   deleteButton: { padding: 12, borderRadius: 8, minWidth: 80, alignItems: 'center' },
-  buttonTextBold: { color: 'black', fontWeight: 'bold' },
+  buttonTextBold: { fontWeight: 'bold' },
 
   // Contact Icons
   contactIconsRow: { flexDirection: 'column', gap: 6, marginLeft: 8 },
@@ -1085,7 +1085,7 @@ const styles = StyleSheet.create({
   },
   choiceButtonText: {
     fontSize: 16,
-    color: 'black',
+    color: 'white',
     fontWeight: 'bold',
   },
 });

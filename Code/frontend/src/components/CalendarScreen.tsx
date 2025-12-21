@@ -672,7 +672,7 @@ export default function CalendarScreen() {
                 <Text style={[
                   styles.modeButtonText,
                   { color: theme.colors.text },
-                  !formState.isSeriesEvent && { color: 'black', fontWeight: 'bold' }
+                  !formState.isSeriesEvent && { color: theme.colors.buttonText, fontWeight: 'bold' }
                 ]}>Single Event</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -687,7 +687,7 @@ export default function CalendarScreen() {
                 <Text style={[
                   styles.modeButtonText,
                   { color: theme.colors.text },
-                  formState.isSeriesEvent && { color: 'black', fontWeight: 'bold' }
+                  formState.isSeriesEvent && { color: theme.colors.buttonText, fontWeight: 'bold' }
                 ]}>Event Series</Text>
               </TouchableOpacity>
             </View>
@@ -724,7 +724,7 @@ export default function CalendarScreen() {
                   <Text style={[
                     styles.chipText,
                     { color: theme.colors.text },
-                    formState.eventTypeIds.includes(et.eventType_id) && { color: 'black', fontWeight: 'bold' }
+                    formState.eventTypeIds.includes(et.eventType_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                   ]}>{et.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -748,7 +748,7 @@ export default function CalendarScreen() {
                   <Text style={[
                     styles.chipText,
                     { color: theme.colors.text },
-                    formState.systemIds.includes(s.system_id) && { color: 'black', fontWeight: 'bold' }
+                    formState.systemIds.includes(s.system_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                   ]}>{s.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -808,7 +808,7 @@ export default function CalendarScreen() {
                       <Text style={[
                         styles.chipText,
                         { color: theme.colors.text, textTransform: 'capitalize' },
-                        formState.repeatPeriod === period && { color: 'black', fontWeight: 'bold' }
+                        formState.repeatPeriod === period && { color: theme.colors.buttonText, fontWeight: 'bold' }
                       ]}>{period}</Text>
                     </TouchableOpacity>
                   ))}
@@ -888,7 +888,7 @@ export default function CalendarScreen() {
                       {preview.first.map((date: any, idx: number) => (
                         <View key={idx} style={styles.previewRow}>
                           <View style={[styles.previewEventNum, { backgroundColor: theme.colors.primary }]}>
-                            <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>#{idx + 1}</Text>
+                            <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold', fontSize: 12 }}>#{idx + 1}</Text>
                           </View>
                           <View style={styles.previewDayCol}>
                             <Text style={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 14 }}>{date.dayOfWeek}</Text>
@@ -909,7 +909,7 @@ export default function CalendarScreen() {
                           {preview.last.map((date: any, idx: number) => (
                             <View key={`last-${idx}`} style={styles.previewRow}>
                               <View style={[styles.previewEventNum, { backgroundColor: theme.colors.primary }]}>
-                                <Text style={{ color: 'black', fontWeight: 'bold', fontSize: 12 }}>
+                                <Text style={{ color: theme.colors.buttonText, fontWeight: 'bold', fontSize: 12 }}>
                                   #{preview.total - preview.last.length + idx + 1}
                                 </Text>
                               </View>
@@ -975,7 +975,7 @@ export default function CalendarScreen() {
                   <Text style={[
                     styles.chipText,
                     { color: theme.colors.text },
-                    formState.venueIds.includes(v.venue_id) && { color: 'black', fontWeight: 'bold' }
+                    formState.venueIds.includes(v.venue_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                   ]}>{v.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -999,13 +999,13 @@ export default function CalendarScreen() {
                     setFormState(prev => ({ ...prev, courtIds: availableCourts.map(c => c.court_id) }));
                   }}
                 >
-                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'all' && { color: 'black' }]}>All Courts</Text>
+                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'all' && { color: theme.colors.buttonText }]}>All Courts</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'count' && { backgroundColor: theme.colors.primary }]}
                   onPress={() => setCourtSelectionMode('count')}
                 >
-                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'count' && { color: 'black' }]}>Number</Text>
+                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'count' && { color: theme.colors.buttonText }]}>Number</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'select' && { backgroundColor: theme.colors.primary }]}
@@ -1014,7 +1014,7 @@ export default function CalendarScreen() {
                     setFormState(prev => ({ ...prev, courtIds: [] })); // Clear for manual selection
                   }}
                 >
-                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'select' && { color: 'black' }]}>Select</Text>
+                  <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'select' && { color: theme.colors.buttonText }]}>Select</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1057,7 +1057,7 @@ export default function CalendarScreen() {
                         <Text style={[
                           styles.chipText,
                           { color: theme.colors.text },
-                          formState.courtIds.includes(c.court_id) && { color: 'black', fontWeight: 'bold' }
+                          formState.courtIds.includes(c.court_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                         ]}>{c.name}{c.venueName ? ` (${c.venueName})` : ''}</Text>
                       </TouchableOpacity>
                     ))}
@@ -1168,7 +1168,7 @@ export default function CalendarScreen() {
                       style={[
                         styles.chipText,
                         { color: theme.colors.text },
-                        formState.teamIds.includes(team.team_id) && { color: 'black', fontWeight: 'bold' }
+                        formState.teamIds.includes(team.team_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                       ]}
                       numberOfLines={2}
                       ellipsizeMode="tail"
@@ -1286,7 +1286,7 @@ export default function CalendarScreen() {
                     <Text style={[
                       styles.chipText,
                       { color: theme.colors.text },
-                      formState.memberIds.includes(member.member_id) && { color: 'black', fontWeight: 'bold' }
+                      formState.memberIds.includes(member.member_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                     ]}>
                       {member.first_name} {member.last_name}
                       {(() => {
@@ -1315,8 +1315,8 @@ export default function CalendarScreen() {
         title="Events"
         rightAction={
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: '#d9534f' }]} onPress={promptDeleteAll}>
-              <Text style={styles.buttonTextWhite}>
+            <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: theme.colors.error }]} onPress={promptDeleteAll}>
+              <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>
                 {searchChips.length > 0
                   ? `Delete Filtered (${filterItemsByChips(
                     events,
@@ -1333,7 +1333,7 @@ export default function CalendarScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={handleAddStart}>
-              <Text style={styles.addButtonText}>New Event</Text>
+              <Text style={[styles.addButtonText, { color: theme.colors.buttonText }]}>New Event</Text>
             </TouchableOpacity>
           </View>
         }
@@ -1399,8 +1399,8 @@ export default function CalendarScreen() {
             {renderForm()}
             <View style={styles.modalButtons}>
               {editingEventId && (
-                <TouchableOpacity style={[styles.deleteButton, { backgroundColor: '#d9534f' }]} onPress={handleDelete}>
-                  <Text style={styles.buttonTextWhite}>Delete</Text>
+                <TouchableOpacity style={[styles.deleteButton, { backgroundColor: theme.colors.error }]} onPress={handleDelete}>
+                  <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>Delete</Text>
                 </TouchableOpacity>
               )}
               <View style={{ flex: 1 }} />
@@ -1416,7 +1416,7 @@ export default function CalendarScreen() {
                 onPress={handleSave}
                 disabled={!isFormValid()}
               >
-                <Text style={[styles.saveButtonText, !isFormValid() && { color: theme.colors.text }]}>
+                <Text style={[styles.saveButtonText, { color: theme.colors.buttonText }, !isFormValid() && { color: theme.colors.text }]}>
                   {(() => {
                     if (formState.isSeriesEvent) {
                       const preview = getSeriesPreviewDates();
@@ -1458,7 +1458,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { textAlign: 'center', marginTop: 20, fontSize: 16 },
   addButton: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
-  addButtonText: { color: 'black', fontWeight: 'bold' },
+  addButtonText: { fontWeight: 'bold' },
   deleteButtonHeader: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
 
   // Modal
@@ -1505,7 +1505,7 @@ const styles = StyleSheet.create({
   deleteButton: { padding: 12, borderRadius: 8, minWidth: 80, alignItems: 'center' },
   buttonText: { fontWeight: '600' },
   buttonTextWhite: { color: 'white', fontWeight: 'bold' },
-  saveButtonText: { color: 'black', fontWeight: 'bold' },
+  saveButtonText: { fontWeight: 'bold' },
 
   // Tab styles
   tabContainer: { flexDirection: 'row', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#ccc' },
