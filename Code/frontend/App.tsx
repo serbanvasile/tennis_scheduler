@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -9,7 +9,8 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView
+  SafeAreaView,
+  ActivityIndicator
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { ThemeProvider, useTheme, MAX_CONTENT_WIDTH } from "./src/ui/theme";
@@ -21,6 +22,8 @@ import RosterScreen from "./src/components/RosterScreen";
 import CalendarScreen from "./src/components/CalendarScreen";
 import TeamsScreen from "./src/components/TeamsScreen";
 import VenuesScreen from "./src/components/VenuesScreen";
+import { seedReferenceData } from "./src/database/seed-reference-data";
+import { validateDatabaseService } from "./src/database/validate-database-service";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -164,6 +167,28 @@ function DateTimeHeader() {
 
 function AppContent() {
   const { theme } = useTheme();
+  const [isReady, setIsReady] = useState(false);
+
+  // Wait for database seeding and validation to complete before rendering
+  useEffect(() => {
+    async function initDatabase() {
+      await seedReferenceData();
+      await validateDatabaseService(); // Validates data structures match UI expectations
+      console.log('✅ Database ready, rendering app');
+      setIsReady(true);
+    }
+    initDatabase();
+  }, []);
+
+  // Show loading screen while seeding
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={{ color: theme.colors.text, marginTop: 16 }}>Initializing database...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>

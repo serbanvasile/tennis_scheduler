@@ -3,23 +3,24 @@ export type DID = string; // did:key / did:pkh
 // --- NEW SCHEMA TYPES (Greenfield) ---
 
 export interface Sport {
-  sport_id: number;
+  sport_id: number | string;
   guid: string;
   name: string;
+  description?: string;
 }
 
 export interface Color {
-  color_id: number;
+  color_id: number | string;
   guid: string;
   name: string;
   hex_code: string;
 }
 
 export interface Team {
-  team_id: number;
+  team_id: number | string;
   guid: string;
   name: string;
-  sport_id?: number;
+  sport_id?: number | string;
   sport_name?: string; // Joined field
   team_colors?: string; // Legacy/Display
   logo_url?: string;
@@ -27,25 +28,35 @@ export interface Team {
 }
 
 export interface Role {
-  role_id: number;
+  role_id: number | string;
   guid: string;
   name: string;
+  description?: string;
 }
 
 export interface Member {
-  member_id: number;
+  member_id: number | string;
   guid: string;
   first_name: string;
   last_name: string;
   display_name: string;
   gender?: string;
+  skill?: number; // Added for RosterScreen compatibility
+  dominant_side?: string;
+  share?: number;
+  share_type?: string;
+  share_percentage?: number;
+  phone?: string;
+  email?: string;
   role_name?: string; // from relationship
   membership_id?: number; // ref key
   joined_date?: number;
+  teams?: Team[];
+  contacts?: any[];
 }
 
 export interface Venue {
-  venue_id: number;
+  venue_id: number | string;
   guid: string;
   name: string;
   address?: string;
@@ -63,7 +74,7 @@ export interface System {
 }
 
 export interface TennisEvent {
-  event_id: number;
+  event_id: string | number;  // Can be UUID string or legacy numeric ID
   guid: string;
   name: string;
   start_date: number;
@@ -87,17 +98,59 @@ export interface TennisEvent {
   team_names?: string;
   season_name?: string;
   is_tournament?: boolean;
+
+  // ID arrays for editing (populated by getEventDetails)
+  venueIds?: number[];
+  teamIds?: number[];
+  memberIds?: number[];
+  eventTypeIds?: number[];
+  systemIds?: number[];
+  courtIds?: number[];
+  fieldIds?: number[];
+  seasonId?: number;
+  isTournament?: boolean;
 }
 
 // --- LEGACY / SHARED TYPES (Keep for compat or reuse) ---
 
 export type Player = Member; // Alias for backward compat in components
 
+export interface Position {
+  position_id: number;
+  guid: string;
+  name: string;
+  sport_id?: number;
+  description?: string;
+}
+
+export interface Skill {
+  skill_id: number;
+  guid: string;
+  name: string;
+  sort_order?: number;
+}
+
 export type Court = {
   id: string;
   label: string;
   location?: string;
   timeSlots: string[];
+};
+
+export type Week = {
+  id: string;
+  leagueId: string;
+  index: number;
+  dateISO: string;
+  status: 'draft' | 'published' | 'completed' | 'cancelled';
+  notes?: string;
+};
+
+export type Availability = {
+  id: string;
+  weekId: string;
+  playerId: string;
+  state: 'in' | 'out' | 'maybe';
 };
 
 export type Match = {
@@ -111,4 +164,39 @@ export type Match = {
   lock?: boolean;
 };
 
-// ... (Other legacy rules/stats types omitted for brevity unless needed)
+export type Score = {
+  id: string;
+  matchId: string;
+  teamAPoints: number;
+  teamBPoints: number;
+};
+
+export interface League {
+  id: string;
+  name: string;
+  season?: {
+    startISO: string;
+    endISO: string;
+    weekDays: number[];
+  };
+  courts: Court[];
+  rules?: any;
+  visibility?: 'public' | 'private';
+  adminDIDs?: string[];
+  createdBy?: string;
+  createdAt?: string;
+}
+
+export interface PlayerStats {
+  playerId: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  sitOuts: number;
+}
+
+export interface FairnessMetrics {
+  partnerVariety: number;
+  opponentVariety: number;
+  courtDistribution: number;
+}

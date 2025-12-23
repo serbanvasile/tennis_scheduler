@@ -290,67 +290,64 @@ export default function CalendarScreen() {
     setShowModal(true);
   };
 
-  const handleEditStart = (event: TennisEvent) => {
-    const start = new Date(event.start_date);
-    // Extract local time components instead of UTC (toISOString)
-    const year = start.getFullYear();
-    const month = String(start.getMonth() + 1).padStart(2, '0');
-    const day = String(start.getDate()).padStart(2, '0');
-    const hours = String(start.getHours()).padStart(2, '0');
-    const minutes = String(start.getMinutes()).padStart(2, '0');
-    const startDate = `${year}-${month}-${day}`;
-    const startTime = `${hours}:${minutes}`;
+  const handleEditStart = async (event: TennisEvent) => {
+    try {
+      console.log('🔄 Loading event details for editing...', event.event_id);
 
-    // Helper to parse comma-separated ID strings into number arrays
-    const parseIds = (idStr: string | null | undefined): number[] => {
-      if (!idStr) return [];
-      return idStr.split(',').map(id => parseInt(id.trim())).filter(n => !isNaN(n));
-    };
+      // Use getEventDetails to get the event with all xref IDs
+      const eventDetails = await databaseService.getEventDetails(event.event_id);
 
-    const venueIds = parseIds((event as any).venue_ids);
-    const courtIds = parseIds((event as any).court_ids);
-    const fieldIds = parseIds((event as any).field_ids);
-    // Single-select: take only first value
-    const eventTypeIds = parseIds((event as any).event_type_ids).slice(0, 1);
-    const systemIds = parseIds((event as any).system_ids).slice(0, 1);
+      console.log('✅ Event details loaded:', eventDetails);
 
-    setFormState({
-      name: event.name,
-      description: event.description || '',
-      startDate,
-      startTime,
-      endTime: '',
-      eventTypeIds,
-      systemIds,
-      venueIds,
-      courtIds,
-      fieldIds,
-      teamIds: parseIds((event as any).team_ids),
-      memberIds: parseIds((event as any).member_ids),
-      isSeriesEvent: false, // When editing, always treat as single event
-      repeatPeriod: event.repeat_period || 'weeks',
-      repeatInterval: event.repeat_interval || 1,
-      totalEvents: event.total_events || 8
-    });
+      const start = new Date(eventDetails.start_date);
+      // Extract local time components instead of UTC (toISOString)
+      const year = start.getFullYear();
+      const month = String(start.getMonth() + 1).padStart(2, '0');
+      const day = String(start.getDate()).padStart(2, '0');
+      const hours = String(start.getHours()).padStart(2, '0');
+      const minutes = String(start.getMinutes()).padStart(2, '0');
+      const startDate = `${year}-${month}-${day}`;
+      const startTime = `${hours}:${minutes}`;
 
-    // Set court selection mode based on existing data
-    if (courtIds.length > 0) {
-      setCourtSelectionMode('select');
+      setFormState({
+        name: eventDetails.name,
+        description: eventDetails.description || '',
+        startDate,
+        startTime,
+        endTime: '',
+        eventTypeIds: eventDetails.eventTypeIds || [],
+        systemIds: eventDetails.systemIds || [],
+        venueIds: eventDetails.venueIds || [],
+        courtIds: eventDetails.courtIds || [],
+        fieldIds: eventDetails.fieldIds || [],
+        teamIds: eventDetails.teamIds || [],
+        memberIds: eventDetails.memberIds || [],
+        isSeriesEvent: false, // When editing, always treat as single event
+        repeatPeriod: eventDetails.repeat_period || 'weeks',
+        repeatInterval: eventDetails.repeat_interval || 1,
+        totalEvents: eventDetails.total_events || 8
+      });
+
+      // Set court selection mode based on existing data
+      if ((eventDetails.courtIds || []).length > 0) {
+        setCourtSelectionMode('select');
+      }
+
+      // Auto-show teams/members by populating search with wildcard
+      if ((eventDetails.teamIds || []).length > 0) {
+        setTeamSearchChips(['*']);
+      }
+      if ((eventDetails.memberIds || []).length > 0) {
+        setMemberSearchChips(['*']);
+      }
+
+      setEditingEventId(eventDetails.event_id);
+      setActiveTab('General');
+      setShowModal(true);
+    } catch (err) {
+      console.error('❌ Failed to load event details:', err);
+      Alert.alert('Error', 'Failed to load event details for editing');
     }
-
-    // Auto-show teams/members by populating search with wildcard
-    const parsedTeamIds = parseIds((event as any).team_ids);
-    const parsedMemberIds = parseIds((event as any).member_ids);
-    if (parsedTeamIds.length > 0) {
-      setTeamSearchChips(['*']);
-    }
-    if (parsedMemberIds.length > 0) {
-      setMemberSearchChips(['*']);
-    }
-
-    setEditingEventId(event.event_id);
-    setActiveTab('General');
-    setShowModal(true);
   };
 
   // Form validation
