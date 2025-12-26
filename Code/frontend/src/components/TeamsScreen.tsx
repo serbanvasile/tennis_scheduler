@@ -50,7 +50,7 @@ export default function TeamsScreen() {
 
     // Search State
     const [searchChips, setSearchChips] = useState<string[]>([]);
-    const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('AND');
+    const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('OR');
 
     useFocusEffect(
         useCallback(() => {
@@ -306,7 +306,7 @@ export default function TeamsScreen() {
                             searchChips,
                             (t) => `${t.name} ${t.sport_name || ''} ${t.team_colors || ''}`,
                             searchMode
-                        )}
+                        ).sort((a, b) => a.name.localeCompare(b.name))}
                         keyExtractor={t => t.team_id.toString()}
                         renderItem={renderTeamCard}
                         contentContainerStyle={styles.list}

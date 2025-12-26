@@ -160,6 +160,61 @@ const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: stri
   );
 };
 
+// Time-based filter keywords for events
+const TIME_KEYWORDS = ['past', 'current', 'future', 'today'] as const;
+
+// Custom filter function that handles time-based keywords
+const filterEventsWithTimeKeywords = (
+  events: TennisEvent[],
+  chips: string[],
+  extractSearchableText: (event: TennisEvent) => string,
+  mode: 'AND' | 'OR'
+): TennisEvent[] => {
+  // Separate time keywords from regular search terms
+  const timeKeywords = chips.filter(chip => TIME_KEYWORDS.includes(chip.toLowerCase() as any));
+  const regularChips = chips.filter(chip => !TIME_KEYWORDS.includes(chip.toLowerCase() as any));
+
+  // Get current date info for time-based filtering
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const todayEnd = todayStart + 24 * 60 * 60 * 1000;
+
+  // First, apply time-based filters
+  let filteredEvents = events;
+  if (timeKeywords.length > 0) {
+    filteredEvents = events.filter(event => {
+      const eventTime = new Date(event.start_date).getTime();
+
+      // In OR mode, event matches if ANY time keyword matches
+      // In AND mode with multiple time keywords, event must match ALL (which may be empty for conflicting keywords)
+      if (mode === 'OR' && timeKeywords.length > 0) {
+        return timeKeywords.some(keyword => {
+          const k = keyword.toLowerCase();
+          if (k === 'past') return eventTime < todayStart;
+          if (k === 'current' || k === 'today') return eventTime >= todayStart && eventTime < todayEnd;
+          if (k === 'future') return eventTime >= todayStart;
+          return true;
+        });
+      } else {
+        return timeKeywords.every(keyword => {
+          const k = keyword.toLowerCase();
+          if (k === 'past') return eventTime < todayStart;
+          if (k === 'current' || k === 'today') return eventTime >= todayStart && eventTime < todayEnd;
+          if (k === 'future') return eventTime >= todayStart;
+          return true;
+        });
+      }
+    });
+  }
+
+  // Then, apply regular text-based filtering
+  if (regularChips.length === 0) {
+    return filteredEvents;
+  }
+
+  return filterItemsByChips(filteredEvents, regularChips, extractSearchableText, mode);
+};
+
 
 export default function CalendarScreen() {
   const [events, setEvents] = useState<TennisEvent[]>([]);
@@ -179,9 +234,9 @@ export default function CalendarScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, onCancel: () => { }, isDestructive: false, confirmLabel: undefined as string | undefined, cancelLabel: undefined as string | undefined });
 
-  // Search State
-  const [searchChips, setSearchChips] = useState<string[]>([]);
-  const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('AND');
+  // Search State - default to showing current and future events only
+  const [searchChips, setSearchChips] = useState<string[]>(['current', 'future']);
+  const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('OR');
 
   // Active Tab for Event Form
   const [activeTab, setActiveTab] = useState('General');
@@ -287,6 +342,10 @@ export default function CalendarScreen() {
     });
     setEditingEventId(null);
     setActiveTab('General');
+    // Reset all search chips to empty (no pre-filled items)
+    setVenueSearchChips([]);
+    setTeamSearchChips([]);
+    setMemberSearchChips([]);
     setShowModal(true);
   };
 
@@ -333,13 +392,11 @@ export default function CalendarScreen() {
         setCourtSelectionMode('select');
       }
 
-      // Auto-show teams/members by populating search with wildcard
-      if ((eventDetails.teamIds || []).length > 0) {
-        setTeamSearchChips(['*']);
-      }
-      if ((eventDetails.memberIds || []).length > 0) {
-        setMemberSearchChips(['*']);
-      }
+      // Reset search chips to empty - user can search to find items to add
+      // Selected items are shown in a separate summary below each section
+      setVenueSearchChips([]);
+      setTeamSearchChips([]);
+      setMemberSearchChips([]);
 
       setEditingEventId(eventDetails.event_id);
       setActiveTab('General');
@@ -619,8 +676,8 @@ export default function CalendarScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>{item.name}</Text>
           {!!item.is_series_event && (
-            <View style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginTop: 4 }}>
-              <Text style={{ color: theme.colors.primary, fontSize: 11, fontWeight: '600' }}>SERIES</Text>
+            <View style={{ backgroundColor: theme.colors.chipBackground, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginTop: 4 }}>
+              <Text style={{ color: theme.colors.chipText, fontSize: 11, fontWeight: '600' }}>SERIES</Text>
             </View>
           )}
         </View>
@@ -939,12 +996,32 @@ export default function CalendarScreen() {
           <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Venues
             </Text>
+
+            {/* Selected Venues - always show assigned venues */}
+            {formState.venueIds.length > 0 && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.label, { color: theme.colors.muted, marginBottom: 8 }]}>Selected ({formState.venueIds.length}):</Text>
+                <View style={styles.chipContainer}>
+                  {venues.filter(v => formState.venueIds.includes(v.venue_id)).map(v => (
+                    <TouchableOpacity
+                      key={`selected-${v.venue_id}`}
+                      style={[styles.chip, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
+                      onPress={() => setFormState(prev => ({ ...prev, venueIds: toggleArrayItem(prev.venueIds, v.venue_id) }))}
+                    >
+                      <Text style={[styles.chipText, { color: theme.colors.buttonText, fontWeight: 'bold' }]}>{v.name} ✕</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Search to add venues */}
             <SearchWithChips
               chips={venueSearchChips}
               onChipsChange={setVenueSearchChips}
               mode={venueSearchMode}
               onModeChange={setVenueSearchMode}
-              placeholder="Type venue name and press ENTER..."
+              placeholder="Type venue name and press ENTER to search..."
               resultCount={filterItemsByChips(
                 venues,
                 venueSearchChips,
@@ -953,33 +1030,42 @@ export default function CalendarScreen() {
               ).length}
               totalCount={venues.length}
             />
-            <View style={styles.chipContainer}>
-              {filterItemsByChips(
-                venues,
-                venueSearchChips,
-                (v) => `${v.name} ${v.address || ''}`,
-                venueSearchMode
-              ).map(v => (
-                <TouchableOpacity
-                  key={v.venue_id}
-                  style={[
-                    styles.chip,
-                    { borderColor: theme.colors.border },
-                    formState.venueIds.includes(v.venue_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                  ]}
-                  onPress={() => setFormState(prev => ({ ...prev, venueIds: toggleArrayItem(prev.venueIds, v.venue_id) }))}
-                >
-                  <Text style={[
-                    styles.chipText,
-                    { color: theme.colors.text },
-                    formState.venueIds.includes(v.venue_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
-                  ]}>{v.name}</Text>
-                </TouchableOpacity>
-              ))}
-              {venues.length === 0 && (
-                <Text style={{ color: theme.colors.muted }}>No venues available</Text>
-              )}
-            </View>
+
+            {/* Search results - only show when searching */}
+            {venueSearchChips.length > 0 && (
+              <View style={styles.chipContainer}>
+                {filterItemsByChips(
+                  venues,
+                  venueSearchChips,
+                  (v) => `${v.name} ${v.address || ''}`,
+                  venueSearchMode
+                ).map(v => (
+                  <TouchableOpacity
+                    key={v.venue_id}
+                    style={[
+                      styles.chip,
+                      { borderColor: theme.colors.border },
+                      formState.venueIds.includes(v.venue_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                    ]}
+                    onPress={() => setFormState(prev => ({ ...prev, venueIds: toggleArrayItem(prev.venueIds, v.venue_id) }))}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      { color: theme.colors.text },
+                      formState.venueIds.includes(v.venue_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
+                    ]}>{v.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {venueSearchChips.length === 0 && formState.venueIds.length === 0 && (
+              <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>Search to add venues</Text>
+            )}
+
+            {venues.length === 0 && (
+              <Text style={{ color: theme.colors.muted }}>No venues available</Text>
+            )}
           </View>
 
           {/* Courts (if venues selected) */}
@@ -1083,12 +1169,42 @@ export default function CalendarScreen() {
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Teams
             </Text>
 
+            {/* Selected Teams - always show assigned teams */}
+            {formState.teamIds.length > 0 && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.label, { color: theme.colors.muted, marginBottom: 8 }]}>Selected ({formState.teamIds.length}):</Text>
+                <View style={styles.chipContainer}>
+                  {teams.filter(t => formState.teamIds.includes(t.team_id)).map(team => (
+                    <TouchableOpacity
+                      key={`selected-${team.team_id}`}
+                      style={[styles.chip, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
+                      onPress={() => {
+                        // Remove team and its associated members
+                        const teamMembers = members.filter(m =>
+                          (m as any).teams?.some((t: any) => t.team_id === team.team_id)
+                        ).map(m => m.member_id);
+                        setFormState(prev => ({
+                          ...prev,
+                          teamIds: prev.teamIds.filter(id => id !== team.team_id),
+                          memberIds: prev.memberIds.filter(mid => !teamMembers.includes(mid))
+                        }));
+                      }}
+                    >
+                      <Text style={[styles.chipText, { color: theme.colors.buttonText, fontWeight: 'bold' }]}>
+                        {team.name} {team.sport_name ? `(${team.sport_name})` : ''} ✕
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
             <SearchWithChips
               chips={teamSearchChips}
               onChipsChange={setTeamSearchChips}
               mode={teamSearchMode}
               onModeChange={setTeamSearchMode}
-              placeholder="Type team name and press ENTER..."
+              placeholder="Type team name and press ENTER to search..."
               resultCount={filterItemsByChips(
                 teams,
                 teamSearchChips,
@@ -1176,6 +1292,10 @@ export default function CalendarScreen() {
                 ))}
               </View>
             )}
+
+            {teamSearchChips.length === 0 && formState.teamIds.length === 0 && (
+              <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>Search to add teams</Text>
+            )}
           </View>
 
           {/* Members (only if teams selected) */}
@@ -1184,12 +1304,37 @@ export default function CalendarScreen() {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Members
               </Text>
 
+              {/* Selected Members - always show assigned members */}
+              {formState.memberIds.length > 0 && (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={[styles.label, { color: theme.colors.muted, marginBottom: 8 }]}>Selected ({formState.memberIds.length}):</Text>
+                  <View style={styles.chipContainer}>
+                    {members.filter(m => formState.memberIds.includes(m.member_id)).map(member => (
+                      <TouchableOpacity
+                        key={`selected-${member.member_id}`}
+                        style={[styles.chip, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
+                        onPress={() => {
+                          setFormState(prev => ({
+                            ...prev,
+                            memberIds: prev.memberIds.filter(id => id !== member.member_id)
+                          }));
+                        }}
+                      >
+                        <Text style={[styles.chipText, { color: theme.colors.buttonText, fontWeight: 'bold' }]}>
+                          {member.first_name} {member.last_name} ✕
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
               <SearchWithChips
                 chips={memberSearchChips}
                 onChipsChange={setMemberSearchChips}
                 mode={memberSearchMode}
                 onModeChange={setMemberSearchMode}
-                placeholder="Type member name and press ENTER..."
+                placeholder="Type member name and press ENTER to search..."
                 resultCount={filterItemsByChips(
                   members.filter(m => {
                     const memberTeams = (m as any).teams || [];
@@ -1217,88 +1362,72 @@ export default function CalendarScreen() {
                 }).length}
               />
 
-              {/* Members List */}
-              <View style={styles.chipContainer}>
-                {filterItemsByChips(
-                  members.filter(m => {
-                    const memberTeams = (m as any).teams || [];
-                    return formState.teamIds.some(teamId =>
-                      memberTeams.some((t: any) => t.team_id === teamId)
-                    );
-                  }),
-                  memberSearchChips,
-                  (m) => {
-                    const name = `${m.first_name} ${m.last_name}`;
-                    const memberTeamsInEvent = (m as any).teams?.filter((t: any) =>
-                      formState.teamIds.includes(t.team_id)
-                    ) || [];
-                    const roles = memberTeamsInEvent.map((t: any) => t.role_names || '').join(' ');
-                    const positions = memberTeamsInEvent.map((t: any) => t.position_names || '').join(' ');
-                    return `${name} ${roles} ${positions}`;
-                  },
-                  memberSearchMode
-                ).map(member => (
-                  <TouchableOpacity
-                    key={member.member_id}
-                    style={[
-                      styles.chip,
-                      { borderColor: theme.colors.border },
-                      formState.memberIds.includes(member.member_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                    ]}
-                    onPress={() => {
-                      if (formState.memberIds.includes(member.member_id)) {
-                        // Remove member
-                        const handleRemove = () => {
+              {/* Members List - only show when searching */}
+              {memberSearchChips.length > 0 && (
+                <View style={styles.chipContainer}>
+                  {filterItemsByChips(
+                    members.filter(m => {
+                      const memberTeams = (m as any).teams || [];
+                      return formState.teamIds.some(teamId =>
+                        memberTeams.some((t: any) => t.team_id === teamId)
+                      );
+                    }),
+                    memberSearchChips,
+                    (m) => {
+                      const name = `${m.first_name} ${m.last_name}`;
+                      const memberTeamsInEvent = (m as any).teams?.filter((t: any) =>
+                        formState.teamIds.includes(t.team_id)
+                      ) || [];
+                      const roles = memberTeamsInEvent.map((t: any) => t.role_names || '').join(' ');
+                      const positions = memberTeamsInEvent.map((t: any) => t.position_names || '').join(' ');
+                      return `${name} ${roles} ${positions}`;
+                    },
+                    memberSearchMode
+                  ).map(member => (
+                    <TouchableOpacity
+                      key={member.member_id}
+                      style={[
+                        styles.chip,
+                        { borderColor: theme.colors.border },
+                        formState.memberIds.includes(member.member_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                      ]}
+                      onPress={() => {
+                        if (formState.memberIds.includes(member.member_id)) {
+                          // Remove member
                           setFormState(prev => ({
                             ...prev,
                             memberIds: prev.memberIds.filter(id => id !== member.member_id)
                           }));
-                        };
-
-                        if (editingEventId) {
-                          setConfirmConfig({
-                            title: 'Remove Member?',
-                            message: `Remove ${member.first_name} ${member.last_name} from this event?`,
-                            isDestructive: true,
-                            confirmLabel: undefined,
-                            cancelLabel: undefined,
-                            onConfirm: () => {
-                              handleRemove();
-                              setConfirmVisible(false);
-                            },
-                            onCancel: () => {
-                              setConfirmVisible(false);
-                            }
-                          });
-                          setConfirmVisible(true);
                         } else {
-                          handleRemove();
+                          // Add member
+                          setFormState(prev => ({ ...prev, memberIds: [...prev.memberIds, member.member_id] }));
                         }
-                      } else {
-                        // Add member
-                        setFormState(prev => ({ ...prev, memberIds: [...prev.memberIds, member.member_id] }));
-                      }
-                    }}
-                  >
-                    <Text style={[
-                      styles.chipText,
-                      { color: theme.colors.text },
-                      formState.memberIds.includes(member.member_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
-                    ]}>
-                      {member.first_name} {member.last_name}
-                      {(() => {
-                        const memberTeamsInEvent = (member as any).teams?.filter((t: any) =>
-                          formState.teamIds.includes(t.team_id)
-                        ) || [];
-                        const roles = memberTeamsInEvent.map((t: any) => t.role_names).filter(Boolean).join(', ');
-                        const positions = memberTeamsInEvent.map((t: any) => t.position_names).filter(Boolean).join(', ');
-                        const details = [roles, positions].filter(Boolean).join(' • ');
-                        return details ? ` (${details})` : '';
-                      })()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                      }}
+                    >
+                      <Text style={[
+                        styles.chipText,
+                        { color: theme.colors.text },
+                        formState.memberIds.includes(member.member_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
+                      ]}>
+                        {member.first_name} {member.last_name}
+                        {(() => {
+                          const memberTeamsInEvent = (member as any).teams?.filter((t: any) =>
+                            formState.teamIds.includes(t.team_id)
+                          ) || [];
+                          const roles = memberTeamsInEvent.map((t: any) => t.role_names).filter(Boolean).join(', ');
+                          const positions = memberTeamsInEvent.map((t: any) => t.position_names).filter(Boolean).join(', ');
+                          const details = [roles, positions].filter(Boolean).join(' • ');
+                          return details ? ` (${details})` : '';
+                        })()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {memberSearchChips.length === 0 && formState.memberIds.length === 0 && (
+                <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>Search to add members from selected teams</Text>
+              )}
             </View>
           )}
         </>
@@ -1348,9 +1477,9 @@ export default function CalendarScreen() {
             onChipsChange={setSearchChips}
             mode={searchMode}
             onModeChange={setSearchMode}
-            placeholder="Search events by name, date, time, type..."
+            placeholder="Use: past, current, future. Wildcards: *"
             topSpacing={true}
-            resultCount={filterItemsByChips(
+            resultCount={filterEventsWithTimeKeywords(
               events,
               searchChips,
               (event) => {
@@ -1364,7 +1493,7 @@ export default function CalendarScreen() {
             totalCount={events.length}
           />
           <FlatList
-            data={filterItemsByChips(
+            data={filterEventsWithTimeKeywords(
               events,
               searchChips,
               (event) => {
@@ -1374,7 +1503,7 @@ export default function CalendarScreen() {
                 return `${event.name} ${event.description || ''} ${dateStr} ${timeStr} ${event.event_type_names || ''} ${event.system_names || ''} ${event.venue_names || ''} ${seriesBadge}`;
               },
               searchMode
-            )}
+            ).sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())}
             keyExtractor={item => item.event_id?.toString() || Math.random().toString()}
             renderItem={renderEventCard}
             contentContainerStyle={styles.list}

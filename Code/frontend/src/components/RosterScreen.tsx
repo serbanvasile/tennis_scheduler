@@ -185,12 +185,13 @@ export default function RosterScreen() {
   // Add Member Choice Modal
   const [addMemberChoiceVisible, setAddMemberChoiceVisible] = useState(false);
 
-  // Add Contact Modal
+  // Add/Edit Contact Modal
   const [addContactModalVisible, setAddContactModalVisible] = useState(false);
+  const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
 
   // Roster Filter
   const [searchChips, setSearchChips] = useState<string[]>([]);
-  const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('AND');
+  const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('OR');
 
   const handleImportClick = () => {
     if (allTeams.length === 0) {
@@ -288,6 +289,7 @@ export default function RosterScreen() {
     setNewContactType('phone');
     setNewContactValue('');
     setNewContactLabel('preferred');
+    setEditingContactIndex(null);
     setActiveTab('General');
   };
 
@@ -510,7 +512,10 @@ export default function RosterScreen() {
               searchChips,
               (m) => `${m.first_name} ${m.last_name} ${m.display_name || ''} ${(m as any).teams?.map((t: any) => `${t.sport_name} ${t.team_name} ${t.role_names || ''} ${t.position_names || ''}`).join(' ') || ''} ${(m as any).phone || ''} ${(m as any).email || ''}`,
               searchMode
-            )}
+            ).sort((a, b) => {
+              const lastNameCompare = a.last_name.localeCompare(b.last_name);
+              return lastNameCompare !== 0 ? lastNameCompare : a.first_name.localeCompare(b.first_name);
+            })}
             keyExtractor={m => m.member_id.toString()}
             renderItem={renderMemberCard}
             contentContainerStyle={styles.list}
@@ -639,41 +644,72 @@ export default function RosterScreen() {
                 <View>
                   <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Assigned Teams</Text>
 
+                  {/* Selected Teams - always show assigned teams with remove button */}
+                  {memberTeams.length > 0 && (
+                    <View style={{ marginBottom: 12 }}>
+                      <Text style={[styles.label, { color: theme.colors.muted, marginBottom: 8 }]}>Selected ({memberTeams.length}):</Text>
+                      <View style={styles.chipContainer}>
+                        {memberTeams.map(mt => {
+                          const team = allTeams.find(t => t.team_id === mt.teamId);
+                          if (!team) return null;
+                          return (
+                            <TouchableOpacity
+                              key={`selected-${mt.teamId}`}
+                              style={[styles.chip, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
+                              onPress={() => toggleTeam(mt.teamId)}
+                            >
+                              <Text style={[styles.chipText, { color: theme.colors.buttonText, fontWeight: 'bold' }]}>
+                                {team.name} ✕
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+
                   <SearchWithChips
                     chips={teamSearchChips}
                     onChipsChange={setTeamSearchChips}
                     mode={teamSearchMode}
                     onModeChange={setTeamSearchMode}
-                    placeholder="Type team name and press ENTER..."
+                    placeholder="Type team name and press ENTER to search..."
                     resultCount={filteredTeams.length}
                     totalCount={allTeams.length}
                   />
 
-                  <View style={styles.chipContainer}>
-                    {filteredTeams.map(t => {
-                      const isSelected = memberTeams.some(mt => mt.teamId === t.team_id);
-                      return (
-                        <TouchableOpacity
-                          key={t.team_id}
-                          style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                          onPress={() => toggleTeam(t.team_id)}
-                        >
-                          <Text
-                            style={[
-                              styles.chipText,
-                              { color: isSelected ? theme.colors.buttonText : theme.colors.text },
-                              isSelected && { fontWeight: 'bold' }
-                            ]}
-                            numberOfLines={2}
-                            ellipsizeMode="tail"
+                  {/* Search results - only show when searching */}
+                  {teamSearchChips.length > 0 && (
+                    <View style={styles.chipContainer}>
+                      {filteredTeams.map(t => {
+                        const isSelected = memberTeams.some(mt => mt.teamId === t.team_id);
+                        return (
+                          <TouchableOpacity
+                            key={t.team_id}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => toggleTeam(t.team_id)}
                           >
-                            {t.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                    {filteredTeams.length === 0 && <Text style={{ color: theme.colors.muted }}>No teams found.</Text>}
-                  </View>
+                            <Text
+                              style={[
+                                styles.chipText,
+                                { color: isSelected ? theme.colors.buttonText : theme.colors.text },
+                                isSelected && { fontWeight: 'bold' }
+                              ]}
+                              numberOfLines={2}
+                              ellipsizeMode="tail"
+                            >
+                              {t.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      {filteredTeams.length === 0 && <Text style={{ color: theme.colors.muted }}>No teams found.</Text>}
+                    </View>
+                  )}
+
+                  {teamSearchChips.length === 0 && memberTeams.length === 0 && (
+                    <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>Search to add teams</Text>
+                  )}
 
                   {memberTeams.map(mt => {
                     const team = allTeams.find(t => t.team_id === mt.teamId);
@@ -781,21 +817,26 @@ export default function RosterScreen() {
                 <View>
                   <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Contact Information</Text>
 
-                  {/* Existing contacts */}
+                  {/* Existing contacts - clickable to edit */}
                   {memberContacts.map((contact, index) => (
-                    <View key={index} style={[styles.teamDetailCard, { borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                    <TouchableOpacity
+                      key={index}
+                      style={[styles.teamDetailCard, { borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                      onPress={() => {
+                        // Open edit modal with this contact's data
+                        setEditingContactIndex(index);
+                        setNewContactType(contact.type.toLowerCase()); // Normalize to lowercase for chip matching
+                        setNewContactValue(contact.value);
+                        setNewContactLabel(contact.label || 'preferred');
+                        setAddContactModalVisible(true);
+                      }}
+                    >
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: theme.colors.text, fontWeight: 'bold' }}>{contact.type}</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: 'bold', textTransform: 'capitalize' }}>{contact.type}</Text>
                         <Text style={{ color: theme.colors.text }}>{contact.value}</Text>
                         <Text style={{ color: theme.colors.muted, fontSize: 12 }}>{contact.label || 'No label'}</Text>
                       </View>
-                      <TouchableOpacity
-                        onPress={() => setMemberContacts(memberContacts.filter((_, i) => i !== index))}
-                        style={{ padding: 8 }}
-                      >
-                        <Text style={{ color: theme.colors.error, fontWeight: 'bold' }}>Remove</Text>
-                      </TouchableOpacity>
-                    </View>
+                    </TouchableOpacity>
                   ))}
 
                   {memberContacts.length === 0 && (
@@ -805,7 +846,14 @@ export default function RosterScreen() {
                   {/* Add Contact Button */}
                   <TouchableOpacity
                     style={[styles.saveButton, { backgroundColor: theme.colors.primary, alignSelf: 'flex-start' }]}
-                    onPress={() => setAddContactModalVisible(true)}
+                    onPress={() => {
+                      // Reset for new contact
+                      setEditingContactIndex(null);
+                      setNewContactType('phone');
+                      setNewContactValue('');
+                      setNewContactLabel('preferred');
+                      setAddContactModalVisible(true);
+                    }}
                   >
                     <Text style={[styles.buttonTextBold, { color: theme.colors.buttonText }]}>Add Contact</Text>
                   </TouchableOpacity>
@@ -886,12 +934,13 @@ export default function RosterScreen() {
         </View>
       </Modal>
 
-      {/* Add Contact Modal */}
+      {/* Add/Edit Contact Modal */}
       <Modal visible={addContactModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, maxHeight: '70%' }]}>
             <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>
-              Add New Contact Method{editingMemberId && firstName && lastName ? ` (${firstName} ${lastName})` : ''}
+              {editingContactIndex !== null ? 'Edit Contact' : 'Add New Contact Method'}
+              {editingMemberId && firstName && lastName ? ` (${firstName} ${lastName})` : ''}
             </Text>
 
             <ScrollView style={styles.modalContent}>
@@ -957,12 +1006,28 @@ export default function RosterScreen() {
             </ScrollView>
 
             <View style={styles.modalButtons}>
-              <View style={{ flex: 1 }} />
+              {/* Delete button - only show when editing */}
+              {editingContactIndex !== null ? (
+                <TouchableOpacity
+                  style={[styles.deleteButton, { backgroundColor: theme.colors.error }]}
+                  onPress={() => {
+                    setMemberContacts(memberContacts.filter((_, i) => i !== editingContactIndex));
+                    setAddContactModalVisible(false);
+                    setEditingContactIndex(null);
+                    setNewContactValue('');
+                  }}
+                >
+                  <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>Delete</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ flex: 1 }} />
+              )}
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <TouchableOpacity
                   style={[styles.cancelButton, { borderColor: theme.colors.muted }]}
                   onPress={() => {
                     setAddContactModalVisible(false);
+                    setEditingContactIndex(null);
                     setNewContactValue('');
                   }}
                 >
@@ -972,13 +1037,25 @@ export default function RosterScreen() {
                   style={[styles.saveButton, { backgroundColor: theme.colors.primary }]}
                   onPress={() => {
                     if (newContactValue.trim()) {
-                      setMemberContacts([...memberContacts, { type: newContactType, value: newContactValue.trim(), label: newContactLabel }]);
+                      const newContact = { type: newContactType, value: newContactValue.trim(), label: newContactLabel };
+                      if (editingContactIndex !== null) {
+                        // Update existing contact
+                        const updatedContacts = [...memberContacts];
+                        updatedContacts[editingContactIndex] = newContact;
+                        setMemberContacts(updatedContacts);
+                      } else {
+                        // Add new contact
+                        setMemberContacts([...memberContacts, newContact]);
+                      }
                       setNewContactValue('');
+                      setEditingContactIndex(null);
                       setAddContactModalVisible(false);
                     }
                   }}
                 >
-                  <Text style={[styles.buttonTextBold, { color: theme.colors.buttonText }]}>Add</Text>
+                  <Text style={[styles.buttonTextBold, { color: theme.colors.buttonText }]}>
+                    {editingContactIndex !== null ? 'Save' : 'Add'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

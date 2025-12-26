@@ -118,7 +118,7 @@ export default function VenuesScreen() {
 
     // Venue List Search State (different from GPS searchQuery in venue modal)
     const [searchChips, setSearchChips] = useState<string[]>([]);
-    const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('AND');
+    const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('OR');
 
     // Expanded venue tracking
     const [expandedVenueId, setExpandedVenueId] = useState<number | null>(null);
@@ -620,7 +620,7 @@ export default function VenuesScreen() {
                             searchChips,
                             (v) => `${v.name} ${v.address || ''} ${v.courts?.map(c => c.name).join(' ') || ''} ${v.fields?.map(f => f.name).join(' ') || ''}`,
                             searchMode
-                        )}
+                        ).sort((a, b) => a.name.localeCompare(b.name))}
                         keyExtractor={item => item.venue_id.toString()}
                         renderItem={renderVenueCard}
                         contentContainerStyle={styles.list}

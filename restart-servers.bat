@@ -46,25 +46,25 @@ echo LAN IP: %LAN_IP%
 echo.
 
 REM Stop any existing processes
-echo [1/4] Stopping existing servers...
+echo [1/2] Stopping existing servers...
 taskkill /f /im node.exe >nul 2>&1
 taskkill /f /im expo.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
 
-echo [2/4] Starting Backend API Server...
-echo Backend Path: %PROJECT_ROOT%\Code\backend
-cd /d "%PROJECT_ROOT%\Code\backend"
-if not exist package.json (
-    echo ERROR: Backend package.json not found in %PROJECT_ROOT%\Code\backend
-    pause
-    exit /b 1
-)
-start "Tennis API Server" cmd /k "npm run restart"
+@REM echo [2/4] Starting Backend API Server...
+@REM echo Backend Path: %PROJECT_ROOT%\Code\backend
+@REM cd /d "%PROJECT_ROOT%\Code\backend"
+@REM if not exist package.json (
+@REM     echo ERROR: Backend package.json not found in %PROJECT_ROOT%\Code\backend
+@REM     pause
+@REM     exit /b 1
+@REM )
+@REM start "Tennis API Server" cmd /k "npm run restart"
 
-echo [3/4] Waiting for backend to initialize...
-timeout /t 3 /nobreak >nul
+@REM echo [3/4] Waiting for backend to initialize...
+@REM timeout /t 3 /nobreak >nul
 
-echo [4/4] Starting Frontend UI Server (%FRONTEND_MODE% mode)...
+echo [2/2] Starting Frontend UI Server (%FRONTEND_MODE% mode)...
 echo Frontend Path: %PROJECT_ROOT%\Code\frontend
 cd /d "%PROJECT_ROOT%\Code\frontend"
 if not exist package.json (
