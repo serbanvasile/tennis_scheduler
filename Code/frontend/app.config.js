@@ -10,7 +10,7 @@ module.exports = ({ config }) => {
 
     return {
         ...config,
-        name: "Tennis Scheduler",
+        name: "Team Sports",
         slug: "tennis-scheduler-expo-starter",
         version: "0.1.1",
         platforms: ["ios", "android", "web"],

@@ -17,6 +17,12 @@ import {
     ContactLabel as ContactLabelModel,
     Position as PositionModel,
     SkillSportXref,
+    AgeGroup as AgeGroupModel,
+    Gender as GenderModel,
+    Level as LevelModel,
+    MatchType as MatchTypeModel,
+    Membership as MembershipModel,
+    PaidStatus as PaidStatusModel,
 } from './models';
 
 const generateGuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -64,6 +70,23 @@ const POSITIONS_BY_SPORT: Record<string, string[]> = {
 // Skills - Tennis/Pickleball use numeric (3.0-5.5), others use general
 const TENNIS_PICKLEBALL_SKILLS = ['3.0', '3.25', '3.5', '3.75', '4.0', '4.25', '4.5', '4.75', '5.0', '5.25', '5.5'];
 const GENERAL_SKILLS = ['Amateur', 'Skilled Amateur', 'Fit Amateur', 'Semi-Pro', 'Pro'];
+
+// === NEW REFERENCE DATA (v2) ===
+
+const AGE_GROUPS = ['Junior', 'Adult', 'Senior', 'Open'];
+
+const GENDERS = ['Men', 'Women', 'Boys', 'Girls', 'Mixed', 'Open'];
+
+const LEVELS = ['Amateur', 'Pro', 'Open'];
+
+// Match types by sport category
+const RACQUET_SPORTS = ['Tennis', 'Pickleball', 'Padel'];
+const MATCH_TYPES_RACQUET = ['Singles', 'Doubles'];
+const MATCH_TYPES_OTHER = ['Match'];
+
+const MEMBERSHIPS = ['Member', 'Non-Member'];
+
+const PAID_STATUSES = ['Paid', 'Not Paid'];
 
 /**
  * Seeds the database with reference data if not already seeded.
@@ -210,6 +233,98 @@ export async function seedReferenceData(): Promise<boolean> {
                 }
             }
             console.log(`  ✓ ${TENNIS_PICKLEBALL_SKILLS.length + GENERAL_SKILLS.length} skills`);
+
+            // 9. Seed Age Groups (v2)
+            for (let i = 0; i < AGE_GROUPS.length; i++) {
+                await database.get<AgeGroupModel>('age_groups').create(a => {
+                    (a as any)._setRaw('guid', generateGuid());
+                    a.name = AGE_GROUPS[i];
+                    a.sortOrder = i + 1;
+                    (a as any)._setRaw('create_date', now);
+                });
+            }
+            console.log(`  ✓ ${AGE_GROUPS.length} age groups`);
+
+            // 10. Seed Genders (v2)
+            for (let i = 0; i < GENDERS.length; i++) {
+                await database.get<GenderModel>('genders').create(g => {
+                    (g as any)._setRaw('guid', generateGuid());
+                    g.name = GENDERS[i];
+                    g.sortOrder = i + 1;
+                    (g as any)._setRaw('create_date', now);
+                });
+            }
+            console.log(`  ✓ ${GENDERS.length} genders`);
+
+            // 11. Seed Levels (v2)
+            for (let i = 0; i < LEVELS.length; i++) {
+                await database.get<LevelModel>('levels').create(l => {
+                    (l as any)._setRaw('guid', generateGuid());
+                    l.name = LEVELS[i];
+                    l.sortOrder = i + 1;
+                    (l as any)._setRaw('create_date', now);
+                });
+            }
+            console.log(`  ✓ ${LEVELS.length} levels`);
+
+            // 12. Seed Match Types (v2) - sport-specific
+            let matchTypeCount = 0;
+            // Racquet sports get Singles/Doubles
+            for (const sportName of RACQUET_SPORTS) {
+                const sportId = sportRecords[sportName];
+                if (sportId) {
+                    for (let i = 0; i < MATCH_TYPES_RACQUET.length; i++) {
+                        await database.get<MatchTypeModel>('match_types').create(m => {
+                            (m as any)._setRaw('guid', generateGuid());
+                            m.name = MATCH_TYPES_RACQUET[i];
+                            m.sportId = sportId;
+                            m.sortOrder = i + 1;
+                            (m as any)._setRaw('create_date', now);
+                        });
+                        matchTypeCount++;
+                    }
+                }
+            }
+            // Other sports get Match
+            const otherSports = SPORTS.filter(s => !RACQUET_SPORTS.includes(s));
+            for (const sportName of otherSports) {
+                const sportId = sportRecords[sportName];
+                if (sportId) {
+                    for (let i = 0; i < MATCH_TYPES_OTHER.length; i++) {
+                        await database.get<MatchTypeModel>('match_types').create(m => {
+                            (m as any)._setRaw('guid', generateGuid());
+                            m.name = MATCH_TYPES_OTHER[i];
+                            m.sportId = sportId;
+                            m.sortOrder = i + 1;
+                            (m as any)._setRaw('create_date', now);
+                        });
+                        matchTypeCount++;
+                    }
+                }
+            }
+            console.log(`  ✓ ${matchTypeCount} match types`);
+
+            // 13. Seed Memberships (v2)
+            for (let i = 0; i < MEMBERSHIPS.length; i++) {
+                await database.get<MembershipModel>('memberships').create(m => {
+                    (m as any)._setRaw('guid', generateGuid());
+                    m.name = MEMBERSHIPS[i];
+                    m.sortOrder = i + 1;
+                    (m as any)._setRaw('create_date', now);
+                });
+            }
+            console.log(`  ✓ ${MEMBERSHIPS.length} memberships`);
+
+            // 14. Seed Paid Statuses (v2)
+            for (let i = 0; i < PAID_STATUSES.length; i++) {
+                await database.get<PaidStatusModel>('paid_statuses').create(p => {
+                    (p as any)._setRaw('guid', generateGuid());
+                    p.name = PAID_STATUSES[i];
+                    p.sortOrder = i + 1;
+                    (p as any)._setRaw('create_date', now);
+                });
+            }
+            console.log(`  ✓ ${PAID_STATUSES.length} paid statuses`);
         });
 
         console.log('🌱 Reference data seeding complete!');
@@ -228,7 +343,7 @@ export async function reseedReferenceData(): Promise<boolean> {
         console.log('🔄 Clearing existing reference data...');
 
         await database.write(async () => {
-            const tables = ['colors', 'sports', 'skills', 'roles', 'event_types', 'systems', 'contact_labels', 'positions', 'skill_sport_xref'];
+            const tables = ['colors', 'sports', 'skills', 'roles', 'event_types', 'systems', 'contact_labels', 'positions', 'skill_sport_xref', 'age_groups', 'genders', 'levels', 'match_types', 'memberships', 'paid_statuses'];
             for (const table of tables) {
                 const records = await database.get<any>(table).query().fetch();
                 for (const r of records) await r.destroyPermanently();

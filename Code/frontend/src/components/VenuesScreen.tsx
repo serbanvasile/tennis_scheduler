@@ -498,7 +498,7 @@ export default function VenuesScreen() {
                             {item.courts.length === 0 ? (
                                 <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>No courts</Text>
                             ) : (
-                                item.courts.map(c => (
+                                [...item.courts].sort((a, b) => a.name.localeCompare(b.name)).map(c => (
                                     <TouchableOpacity
                                         key={c.court_id}
                                         style={[styles.resourceItem, { borderColor: theme.colors.border }]}
@@ -535,7 +535,7 @@ export default function VenuesScreen() {
                             {item.fields.length === 0 ? (
                                 <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>No fields</Text>
                             ) : (
-                                item.fields.map(f => (
+                                [...item.fields].sort((a, b) => a.name.localeCompare(b.name)).map(f => (
                                     <TouchableOpacity
                                         key={f.field_id}
                                         style={[styles.resourceItem, { borderColor: theme.colors.border }]}

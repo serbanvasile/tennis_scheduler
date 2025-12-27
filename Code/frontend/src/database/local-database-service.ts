@@ -41,6 +41,21 @@ import {
     SkillSportXref,
     MemberRoleXref,
     MemberPositionXref,
+    // New v2 models
+    AgeGroup as AgeGroupModel,
+    Gender as GenderModel,
+    Level as LevelModel,
+    MatchType as MatchTypeModel,
+    Membership as MembershipModel,
+    PaidStatus as PaidStatusModel,
+    EventAgeGroupXref,
+    EventGenderXref,
+    EventLevelXref,
+    EventMatchTypeXref,
+    MemberAgeGroupXref,
+    MemberGenderXref,
+    MemberMembershipXref,
+    MemberPaidStatusXref,
 } from './models';
 import type { Member, Team, Venue, TennisEvent, Player, Color, Sport, Skill, Role, Position, System } from '../types';
 
@@ -62,16 +77,24 @@ class LocalDatabaseService {
 
     async getLookups(): Promise<any> {
         try {
-            const [sports, roles, skillModels, eventTypes, systems, positions, skillSportXrefs, contactLabels] = await Promise.all([
-                database.get<SportModel>('sports').query().fetch(),
-                database.get<RoleModel>('roles').query().fetch(),
-                database.get<SkillModel>('skills').query().fetch(),
-                database.get<EventTypeModel>('event_types').query().fetch(),
-                database.get<SystemModel>('systems').query().fetch(),
-                database.get<any>('positions').query().fetch(),
-                database.get<SkillSportXref>('skill_sport_xref').query().fetch(),
-                database.get<ContactLabelModel>('contact_labels').query().fetch(),
-            ]);
+            const [sports, roles, skillModels, eventTypes, systems, positions, skillSportXrefs, contactLabels,
+                ageGroups, genders, levels, matchTypes, memberships, paidStatuses] = await Promise.all([
+                    database.get<SportModel>('sports').query().fetch(),
+                    database.get<RoleModel>('roles').query().fetch(),
+                    database.get<SkillModel>('skills').query().fetch(),
+                    database.get<EventTypeModel>('event_types').query().fetch(),
+                    database.get<SystemModel>('systems').query().fetch(),
+                    database.get<any>('positions').query().fetch(),
+                    database.get<SkillSportXref>('skill_sport_xref').query().fetch(),
+                    database.get<ContactLabelModel>('contact_labels').query().fetch(),
+                    // New v2 lookups
+                    database.get<AgeGroupModel>('age_groups').query().fetch(),
+                    database.get<GenderModel>('genders').query().fetch(),
+                    database.get<LevelModel>('levels').query().fetch(),
+                    database.get<MatchTypeModel>('match_types').query().fetch(),
+                    database.get<MembershipModel>('memberships').query().fetch(),
+                    database.get<PaidStatusModel>('paid_statuses').query().fetch(),
+                ]);
 
             console.log('[getLookups] Found', skillModels.length, 'skills,', skillSportXrefs.length, 'skill-sport links');
 
@@ -114,6 +137,14 @@ class LocalDatabaseService {
             const positionsData = positions.map((p: any) => ({ position_id: p.id, name: p.name, sport_id: p.sportId }));
             const contactLabelsData = contactLabels.map((l: any) => ({ label_id: l.id, name: l.name, sort_order: l.sortOrder }));
 
+            // New v2 lookup data
+            const ageGroupsData = ageGroups.map((a: any) => ({ age_group_id: a.id, name: a.name, sort_order: a.sortOrder }));
+            const gendersData = genders.map((g: any) => ({ gender_id: g.id, name: g.name, sort_order: g.sortOrder }));
+            const levelsData = levels.map((l: any) => ({ level_id: l.id, name: l.name, sort_order: l.sortOrder }));
+            const matchTypesData = matchTypes.map((m: any) => ({ match_type_id: m.id, name: m.name, sport_id: m.sportId, sort_order: m.sortOrder }));
+            const membershipsData = memberships.map((m: any) => ({ membership_id: m.id, name: m.name, sort_order: m.sortOrder }));
+            const paidStatusesData = paidStatuses.map((p: any) => ({ paid_status_id: p.id, name: p.name, sort_order: p.sortOrder }));
+
             checkDuplicates(sportsData, 'sport_id', 'sports');
             checkDuplicates(rolesData, 'role_id', 'roles');
             checkDuplicates(skills, 'skill_id', 'skills');
@@ -130,6 +161,12 @@ class LocalDatabaseService {
                 systems: systemsData.length,
                 positions: positionsData.length,
                 contact_labels: contactLabelsData.length,
+                age_groups: ageGroupsData.length,
+                genders: gendersData.length,
+                levels: levelsData.length,
+                match_types: matchTypesData.length,
+                memberships: membershipsData.length,
+                paid_statuses: paidStatusesData.length,
             });
 
             return {
@@ -140,12 +177,20 @@ class LocalDatabaseService {
                 systems: systemsData,
                 positions: positionsData,
                 contact_labels: contactLabelsData,
+                // New v2 lookups
+                age_groups: ageGroupsData,
+                genders: gendersData,
+                levels: levelsData,
+                match_types: matchTypesData,
+                memberships: membershipsData,
+                paid_statuses: paidStatusesData,
             };
         } catch (err) {
             console.error('getLookups failed', err);
             return {};
         }
     }
+
 
     // ============================================================================
     // PREFERENCES
@@ -614,6 +659,7 @@ class LocalDatabaseService {
                     team_id: team.id,
                     name: team.name,
                     skill_id: xref.skillId,
+                    level_id: xref.levelId,
                     roles,
                     positions,
                 });
@@ -624,13 +670,41 @@ class LocalDatabaseService {
         const firstTeamSkillId = teams.length > 0 ? teams[0].skill_id : null;
         const skill = firstTeamSkillId ? parseFloat(firstTeamSkillId) : undefined;
 
+        // Get age group xrefs (v2) - multi-select
+        const ageGroupXrefs = await database.get<MemberAgeGroupXref>('member_age_group_xref').query(
+            Q.where('member_id', member.id)
+        ).fetch();
+        const ageGroupIds = ageGroupXrefs.map((x: any) => x.ageGroupId);
+
+        // Get gender xrefs (v2) - multi-select
+        const genderXrefs = await database.get<MemberGenderXref>('member_gender_xref').query(
+            Q.where('member_id', member.id)
+        ).fetch();
+        const genderCategoryIds = genderXrefs.map((x: any) => x.genderId);
+
+        // Get membership xref (v2)
+        const membershipXrefs = await database.get<MemberMembershipXref>('member_membership_xref').query(
+            Q.where('member_id', member.id)
+        ).fetch();
+        const membershipId = membershipXrefs.length > 0 ? membershipXrefs[0].membershipId : undefined;
+
+        // Get paid status xref (v2)
+        const paidStatusXrefs = await database.get<MemberPaidStatusXref>('member_paid_status_xref').query(
+            Q.where('member_id', member.id)
+        ).fetch();
+        const paidStatusId = paidStatusXrefs.length > 0 ? paidStatusXrefs[0].paidStatusId : undefined;
+
         console.log('[getMemberDetails] Returning:', {
             member_id: member.id,
             phone,
             email,
             skill,
             contacts: contacts.length,
-            teams: teams.length
+            teams: teams.length,
+            ageGroupIds,
+            genderCategoryIds,
+            membershipId,
+            paidStatusId
         });
 
         return {
@@ -648,6 +722,13 @@ class LocalDatabaseService {
             email,
             teams,
             contacts,
+            // New v2 fields
+            age_group_ids: ageGroupIds,
+            gender_category_ids: genderCategoryIds,
+            membership_id: membershipId,
+            paid_status_id: paidStatusId,
+            paid_amount: member.paidAmount,
+            country_of_origin: member.countryOfOrigin,
         } as Member;
     }
 
@@ -664,6 +745,10 @@ class LocalDatabaseService {
                     m.dominantSide = data.dominant_side || 'R';
                     m.share = data.share || 0;
                     m.shareType = data.share_type || 'R';
+                    m.shareType = data.share_type || 'R';
+                    m.paidAmount = data.paid_amount ?? data.paidAmount ?? null;
+                    m.birthDate = data.birth_date ?? data.birthDate ?? null;
+                    m.countryOfOrigin = data.country_of_origin ?? data.countryOfOrigin ?? null;
                     (m as any)._setRaw('create_date', Date.now());
                 });
                 memberId = member.id;
@@ -720,6 +805,7 @@ class LocalDatabaseService {
                             x.teamId = teamId;
                             x.memberId = memberId;
                             x.skillId = teamInfo.skill_id?.toString() || teamInfo.skillId?.toString() || null;
+                            x.levelId = teamInfo.level_id?.toString() || teamInfo.levelId?.toString() || null;
                         });
 
                         // Link roles for this team
@@ -745,6 +831,42 @@ class LocalDatabaseService {
                         }
                     }
                 }
+
+                // Link age groups (v2) - multi-select
+                const ageGroupIds = data.age_group_ids || data.ageGroupIds || [];
+                for (const ageGroupId of ageGroupIds) {
+                    await database.get<MemberAgeGroupXref>('member_age_group_xref').create(x => {
+                        x.memberId = memberId;
+                        x.ageGroupId = ageGroupId.toString();
+                    });
+                }
+
+                // Link gender categories (v2) - multi-select
+                const genderCategoryIds = data.gender_category_ids || data.genderCategoryIds || [];
+                for (const genderId of genderCategoryIds) {
+                    await database.get<MemberGenderXref>('member_gender_xref').create(x => {
+                        x.memberId = memberId;
+                        x.genderId = genderId.toString();
+                    });
+                }
+
+                // Link membership (v2)
+                if (data.membership_id || data.membershipId) {
+                    const membershipId = data.membership_id || data.membershipId;
+                    await database.get<MemberMembershipXref>('member_membership_xref').create(x => {
+                        x.memberId = memberId;
+                        x.membershipId = membershipId.toString();
+                    });
+                }
+
+                // Link paid status (v2)
+                if (data.paid_status_id || data.paidStatusId) {
+                    const paidStatusId = data.paid_status_id || data.paidStatusId;
+                    await database.get<MemberPaidStatusXref>('member_paid_status_xref').create(x => {
+                        x.memberId = memberId;
+                        x.paidStatusId = paidStatusId.toString();
+                    });
+                }
             });
 
             return { success: true, member_id: memberId };
@@ -766,6 +888,10 @@ class LocalDatabaseService {
                     m.dominantSide = data.dominant_side || m.dominantSide;
                     m.share = data.share ?? m.share;
                     m.shareType = data.share_type || m.shareType;
+                    m.shareType = data.share_type || m.shareType;
+                    m.paidAmount = data.paid_amount ?? data.paidAmount ?? m.paidAmount;
+                    m.birthDate = data.birth_date ?? data.birthDate ?? m.birthDate;
+                    m.countryOfOrigin = data.country_of_origin ?? data.countryOfOrigin ?? m.countryOfOrigin;
                     (m as any)._setRaw('update_date', Date.now());
                 });
 
@@ -856,6 +982,7 @@ class LocalDatabaseService {
                             x.teamId = teamId;
                             x.memberId = memberId.toString();
                             x.skillId = teamInfo.skill_id?.toString() || teamInfo.skillId?.toString() || null;
+                            x.levelId = teamInfo.level_id?.toString() || teamInfo.levelId?.toString() || null;
                         });
 
                         // Link roles for this team
@@ -880,6 +1007,66 @@ class LocalDatabaseService {
                             });
                         }
                     }
+                }
+
+                // Delete and recreate age group xrefs (v2) - multi-select
+                const oldAgeGroupXrefs = await database.get<MemberAgeGroupXref>('member_age_group_xref').query(
+                    Q.where('member_id', memberId.toString())
+                ).fetch();
+                for (const xref of oldAgeGroupXrefs) {
+                    await xref.destroyPermanently();
+                }
+                const ageGroupIds = data.age_group_ids || data.ageGroupIds || [];
+                for (const ageGroupId of ageGroupIds) {
+                    await database.get<MemberAgeGroupXref>('member_age_group_xref').create(x => {
+                        x.memberId = memberId.toString();
+                        x.ageGroupId = ageGroupId.toString();
+                    });
+                }
+
+                // Delete and recreate gender category xrefs (v2) - multi-select
+                const oldGenderXrefs = await database.get<MemberGenderXref>('member_gender_xref').query(
+                    Q.where('member_id', memberId.toString())
+                ).fetch();
+                for (const xref of oldGenderXrefs) {
+                    await xref.destroyPermanently();
+                }
+                const genderCategoryIds = data.gender_category_ids || data.genderCategoryIds || [];
+                for (const genderId of genderCategoryIds) {
+                    await database.get<MemberGenderXref>('member_gender_xref').create(x => {
+                        x.memberId = memberId.toString();
+                        x.genderId = genderId.toString();
+                    });
+                }
+
+                // Delete and recreate membership xrefs (v2)
+                const oldMembershipXrefs = await database.get<MemberMembershipXref>('member_membership_xref').query(
+                    Q.where('member_id', memberId.toString())
+                ).fetch();
+                for (const xref of oldMembershipXrefs) {
+                    await xref.destroyPermanently();
+                }
+                if (data.membership_id || data.membershipId) {
+                    const membershipId = data.membership_id || data.membershipId;
+                    await database.get<MemberMembershipXref>('member_membership_xref').create(x => {
+                        x.memberId = memberId.toString();
+                        x.membershipId = membershipId.toString();
+                    });
+                }
+
+                // Delete and recreate paid status xrefs (v2)
+                const oldPaidStatusXrefs = await database.get<MemberPaidStatusXref>('member_paid_status_xref').query(
+                    Q.where('member_id', memberId.toString())
+                ).fetch();
+                for (const xref of oldPaidStatusXrefs) {
+                    await xref.destroyPermanently();
+                }
+                if (data.paid_status_id || data.paidStatusId) {
+                    const paidStatusId = data.paid_status_id || data.paidStatusId;
+                    await database.get<MemberPaidStatusXref>('member_paid_status_xref').create(x => {
+                        x.memberId = memberId.toString();
+                        x.paidStatusId = paidStatusId.toString();
+                    });
                 }
             });
 
@@ -1199,6 +1386,30 @@ class LocalDatabaseService {
             const seasonId = seasonXrefs.length > 0 ? seasonXrefs[0].seasonId : undefined;  // UUIDs are strings
             const isTournament = seasonXrefs.length > 0 ? !!seasonXrefs[0].isTournament : undefined;
 
+            // Get age group IDs (v2)
+            const ageGroupXrefs = await database.get<EventAgeGroupXref>('event_age_group_xref').query(
+                Q.where('event_id', event.id)
+            ).fetch();
+            const ageGroupIds = ageGroupXrefs.map((x: any) => x.ageGroupId);
+
+            // Get gender IDs (v2)
+            const genderXrefs = await database.get<EventGenderXref>('event_gender_xref').query(
+                Q.where('event_id', event.id)
+            ).fetch();
+            const genderIds = genderXrefs.map((x: any) => x.genderId);
+
+            // Get level IDs (v2)
+            const levelXrefs = await database.get<EventLevelXref>('event_level_xref').query(
+                Q.where('event_id', event.id)
+            ).fetch();
+            const levelIds = levelXrefs.map((x: any) => x.levelId);
+
+            // Get match type IDs (v2)
+            const matchTypeXrefs = await database.get<EventMatchTypeXref>('event_match_type_xref').query(
+                Q.where('event_id', event.id)
+            ).fetch();
+            const matchTypeIds = matchTypeXrefs.map((x: any) => x.matchTypeId);
+
             return {
                 event_id: event.id,  // Use string ID directly
                 guid: event.guid || '',
@@ -1221,12 +1432,17 @@ class LocalDatabaseService {
                 fieldIds,
                 seasonId,
                 isTournament,
+                ageGroupIds,
+                genderIds,
+                levelIds,
+                matchTypeIds,
             } as TennisEvent;
         } catch (err) {
             console.error('getEventDetails failed', err);
             throw err;
         }
     }
+
 
     async createEvent(eventData: {
         name: string;
@@ -1242,6 +1458,11 @@ class LocalDatabaseService {
         fieldIds?: number[];
         seasonId?: number;
         isTournament?: boolean;
+        // New v2 fields
+        ageGroupIds?: number[];
+        genderIds?: number[];
+        levelIds?: number[];
+        matchTypeIds?: number[];
         isSeriesEvent?: boolean;
         repeatPeriod?: 'hours' | 'days' | 'weeks';
         repeatInterval?: number;
@@ -1380,6 +1601,46 @@ class LocalDatabaseService {
                             });
                         }
 
+                        // Link age groups (v2)
+                        if (eventData.ageGroupIds) {
+                            for (const ageGroupId of eventData.ageGroupIds) {
+                                await database.get<EventAgeGroupXref>('event_age_group_xref').create(x => {
+                                    x.eventId = eventId;
+                                    x.ageGroupId = ageGroupId.toString();
+                                });
+                            }
+                        }
+
+                        // Link genders (v2)
+                        if (eventData.genderIds) {
+                            for (const genderId of eventData.genderIds) {
+                                await database.get<EventGenderXref>('event_gender_xref').create(x => {
+                                    x.eventId = eventId;
+                                    x.genderId = genderId.toString();
+                                });
+                            }
+                        }
+
+                        // Link levels (v2)
+                        if (eventData.levelIds) {
+                            for (const levelId of eventData.levelIds) {
+                                await database.get<EventLevelXref>('event_level_xref').create(x => {
+                                    x.eventId = eventId;
+                                    x.levelId = levelId.toString();
+                                });
+                            }
+                        }
+
+                        // Link match types (v2)
+                        if (eventData.matchTypeIds) {
+                            for (const matchTypeId of eventData.matchTypeIds) {
+                                await database.get<EventMatchTypeXref>('event_match_type_xref').create(x => {
+                                    x.eventId = eventId;
+                                    x.matchTypeId = matchTypeId.toString();
+                                });
+                            }
+                        }
+
                         i++;
                     }
                 });
@@ -1486,7 +1747,48 @@ class LocalDatabaseService {
                             x.isTournament = eventData.isTournament ? 1 : 0;
                         });
                     }
+
+                    // Link age groups (v2)
+                    if (eventData.ageGroupIds) {
+                        for (const ageGroupId of eventData.ageGroupIds) {
+                            await database.get<EventAgeGroupXref>('event_age_group_xref').create(x => {
+                                x.eventId = eventId;
+                                x.ageGroupId = ageGroupId.toString();
+                            });
+                        }
+                    }
+
+                    // Link genders (v2)
+                    if (eventData.genderIds) {
+                        for (const genderId of eventData.genderIds) {
+                            await database.get<EventGenderXref>('event_gender_xref').create(x => {
+                                x.eventId = eventId;
+                                x.genderId = genderId.toString();
+                            });
+                        }
+                    }
+
+                    // Link levels (v2)
+                    if (eventData.levelIds) {
+                        for (const levelId of eventData.levelIds) {
+                            await database.get<EventLevelXref>('event_level_xref').create(x => {
+                                x.eventId = eventId;
+                                x.levelId = levelId.toString();
+                            });
+                        }
+                    }
+
+                    // Link match types (v2)
+                    if (eventData.matchTypeIds) {
+                        for (const matchTypeId of eventData.matchTypeIds) {
+                            await database.get<EventMatchTypeXref>('event_match_type_xref').create(x => {
+                                x.eventId = eventId;
+                                x.matchTypeId = matchTypeId.toString();
+                            });
+                        }
+                    }
                 });
+
 
                 return { success: true, event_id: eventId };
             }
@@ -1645,7 +1947,72 @@ class LocalDatabaseService {
                         x.isTournament = eventData.isTournament ? 1 : 0;
                     });
                 }
+
+                // Delete and recreate age group xrefs (v2)
+                const oldAgeGroupXrefs = await database.get<EventAgeGroupXref>('event_age_group_xref').query(
+                    Q.where('event_id', eventId.toString())
+                ).fetch();
+                for (const xref of oldAgeGroupXrefs) {
+                    await xref.destroyPermanently();
+                }
+                if (eventData.ageGroupIds) {
+                    for (const ageGroupId of eventData.ageGroupIds) {
+                        await database.get<EventAgeGroupXref>('event_age_group_xref').create((x: any) => {
+                            x.eventId = eventId.toString();
+                            x.ageGroupId = ageGroupId.toString();
+                        });
+                    }
+                }
+
+                // Delete and recreate gender xrefs (v2)
+                const oldGenderXrefs = await database.get<EventGenderXref>('event_gender_xref').query(
+                    Q.where('event_id', eventId.toString())
+                ).fetch();
+                for (const xref of oldGenderXrefs) {
+                    await xref.destroyPermanently();
+                }
+                if (eventData.genderIds) {
+                    for (const genderId of eventData.genderIds) {
+                        await database.get<EventGenderXref>('event_gender_xref').create((x: any) => {
+                            x.eventId = eventId.toString();
+                            x.genderId = genderId.toString();
+                        });
+                    }
+                }
+
+                // Delete and recreate level xrefs (v2)
+                const oldLevelXrefs = await database.get<EventLevelXref>('event_level_xref').query(
+                    Q.where('event_id', eventId.toString())
+                ).fetch();
+                for (const xref of oldLevelXrefs) {
+                    await xref.destroyPermanently();
+                }
+                if (eventData.levelIds) {
+                    for (const levelId of eventData.levelIds) {
+                        await database.get<EventLevelXref>('event_level_xref').create((x: any) => {
+                            x.eventId = eventId.toString();
+                            x.levelId = levelId.toString();
+                        });
+                    }
+                }
+
+                // Delete and recreate match type xrefs (v2)
+                const oldMatchTypeXrefs = await database.get<EventMatchTypeXref>('event_match_type_xref').query(
+                    Q.where('event_id', eventId.toString())
+                ).fetch();
+                for (const xref of oldMatchTypeXrefs) {
+                    await xref.destroyPermanently();
+                }
+                if (eventData.matchTypeIds) {
+                    for (const matchTypeId of eventData.matchTypeIds) {
+                        await database.get<EventMatchTypeXref>('event_match_type_xref').create((x: any) => {
+                            x.eventId = eventId.toString();
+                            x.matchTypeId = matchTypeId.toString();
+                        });
+                    }
+                }
             });
+
 
             return { success: true };
         } catch (err) {

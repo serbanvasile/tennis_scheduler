@@ -37,6 +37,11 @@ interface EventFormState {
   fieldIds: number[];
   teamIds: number[];
   memberIds: number[];
+  // New v2 fields
+  ageGroupIds: number[];
+  genderIds: number[];
+  levelIds: number[];
+  matchTypeIds: number[];
   // Series options
   isSeriesEvent: boolean;
   repeatPeriod: 'hours' | 'days' | 'weeks';
@@ -59,6 +64,10 @@ const defaultFormState: EventFormState = {
   fieldIds: [],
   teamIds: [],
   memberIds: [],
+  ageGroupIds: [],
+  genderIds: [],
+  levelIds: [],
+  matchTypeIds: [],
   isSeriesEvent: false,
   repeatPeriod: 'weeks',
   repeatInterval: 1,
@@ -221,6 +230,11 @@ export default function CalendarScreen() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [eventTypes, setEventTypes] = useState<any[]>([]);
   const [systems, setSystems] = useState<System[]>([]);
+  // New v2 lookup state
+  const [ageGroups, setAgeGroups] = useState<any[]>([]);
+  const [genders, setGenders] = useState<any[]>([]);
+  const [levels, setLevels] = useState<any[]>([]);
+  const [matchTypes, setMatchTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
@@ -284,6 +298,11 @@ export default function CalendarScreen() {
       if (lookups) {
         setEventTypes(lookups.eventTypes || []);
         setSystems(lookups.systems || []);
+        // New v2 lookups
+        setAgeGroups(lookups.age_groups || []);
+        setGenders(lookups.genders || []);
+        setLevels(lookups.levels || []);
+        setMatchTypes(lookups.match_types || []);
       }
       if (prefs) {
         setPreviewFirstCount(prefs.preview_first_count || 4);
@@ -310,6 +329,8 @@ export default function CalendarScreen() {
           const venue = venues.find(v => v.venue_id === venueId);
           courts.forEach((c: any) => allCourts.push({ ...c, venueName: venue?.name }));
         }
+        // Sort courts alphabetically by name
+        allCourts.sort((a, b) => a.name.localeCompare(b.name));
         setAvailableCourts(allCourts);
         // Reset court selection when venues change
         if (courtSelectionMode === 'all') {
@@ -381,6 +402,10 @@ export default function CalendarScreen() {
         fieldIds: eventDetails.fieldIds || [],
         teamIds: eventDetails.teamIds || [],
         memberIds: eventDetails.memberIds || [],
+        ageGroupIds: eventDetails.ageGroupIds || [],
+        genderIds: eventDetails.genderIds || [],
+        levelIds: eventDetails.levelIds || [],
+        matchTypeIds: eventDetails.matchTypeIds || [],
         isSeriesEvent: false, // When editing, always treat as single event
         repeatPeriod: eventDetails.repeat_period || 'weeks',
         repeatInterval: eventDetails.repeat_interval || 1,
@@ -442,7 +467,12 @@ export default function CalendarScreen() {
         courtIds: formState.courtIds,
         fieldIds: formState.fieldIds,
         teamIds: formState.teamIds,
-        memberIds: formState.memberIds
+        memberIds: formState.memberIds,
+        // New v2 fields
+        ageGroupIds: formState.ageGroupIds,
+        genderIds: formState.genderIds,
+        levelIds: formState.levelIds,
+        matchTypeIds: formState.matchTypeIds
       };
 
       console.log('💾 Saving event with data:', eventData);
@@ -804,6 +834,107 @@ export default function CalendarScreen() {
                     { color: theme.colors.text },
                     formState.systemIds.includes(s.system_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                   ]}>{s.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Event Classification (v2) */}
+          <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Event Classification</Text>
+
+            <Text style={[styles.labelFirst, { color: theme.colors.text }]}>Age Group</Text>
+            <View style={styles.chipContainer}>
+              {ageGroups.map(ag => (
+                <TouchableOpacity
+                  key={ag.age_group_id}
+                  style={[
+                    styles.chip,
+                    { borderColor: theme.colors.border },
+                    formState.ageGroupIds.includes(ag.age_group_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  ]}
+                  onPress={() => setFormState(prev => ({
+                    ...prev,
+                    ageGroupIds: prev.ageGroupIds.includes(ag.age_group_id) ? [] : [ag.age_group_id]
+                  }))}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: theme.colors.text },
+                    formState.ageGroupIds.includes(ag.age_group_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
+                  ]}>{ag.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: theme.colors.text }]}>Gender</Text>
+            <View style={styles.chipContainer}>
+              {genders.map(g => (
+                <TouchableOpacity
+                  key={g.gender_id}
+                  style={[
+                    styles.chip,
+                    { borderColor: theme.colors.border },
+                    formState.genderIds.includes(g.gender_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  ]}
+                  onPress={() => setFormState(prev => ({
+                    ...prev,
+                    genderIds: prev.genderIds.includes(g.gender_id) ? [] : [g.gender_id]
+                  }))}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: theme.colors.text },
+                    formState.genderIds.includes(g.gender_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
+                  ]}>{g.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: theme.colors.text }]}>Level</Text>
+            <View style={styles.chipContainer}>
+              {levels.map(l => (
+                <TouchableOpacity
+                  key={l.level_id}
+                  style={[
+                    styles.chip,
+                    { borderColor: theme.colors.border },
+                    formState.levelIds.includes(l.level_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  ]}
+                  onPress={() => setFormState(prev => ({
+                    ...prev,
+                    levelIds: prev.levelIds.includes(l.level_id) ? [] : [l.level_id]
+                  }))}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: theme.colors.text },
+                    formState.levelIds.includes(l.level_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
+                  ]}>{l.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: theme.colors.text }]}>Match Type</Text>
+            <View style={styles.chipContainer}>
+              {matchTypes.map(mt => (
+                <TouchableOpacity
+                  key={mt.match_type_id}
+                  style={[
+                    styles.chip,
+                    { borderColor: theme.colors.border },
+                    formState.matchTypeIds.includes(mt.match_type_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  ]}
+                  onPress={() => setFormState(prev => ({
+                    ...prev,
+                    matchTypeIds: prev.matchTypeIds.includes(mt.match_type_id) ? [] : [mt.match_type_id]
+                  }))}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: theme.colors.text },
+                    formState.matchTypeIds.includes(mt.match_type_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
+                  ]}>{mt.name}</Text>
                 </TouchableOpacity>
               ))}
             </View>

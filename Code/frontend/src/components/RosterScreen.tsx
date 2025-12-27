@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -27,26 +27,57 @@ import { filterItemsByChips } from '../utils/searchUtils';
 // Tab Component
 const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: string) => void }) => {
   const { theme } = useTheme();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [tabLayouts, setTabLayouts] = useState<{ [key: string]: { x: number, width: number } }>({});
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const tabs = [
+    { key: 'General', label: 'General' },
+    { key: 'Participation', label: 'Participation' },
+    { key: 'Teams', label: 'Teams & Roles' },
+    { key: 'Contract', label: 'Contract' },
+    { key: 'Contact', label: 'Contact' },
+    { key: 'Extra', label: 'Extra' }
+  ];
+
+  const handleTabPress = (key: string) => {
+    onChange(key);
+    const layout = tabLayouts[key];
+    if (layout && scrollViewRef.current && containerWidth > 0) {
+      const tabCenter = layout.x + layout.width / 2;
+      const containerCenter = containerWidth / 2;
+      const scrollX = tabCenter - containerCenter;
+      scrollViewRef.current.scrollTo({ x: scrollX, animated: true });
+    }
+  };
+
   return (
     <View style={commonStyles.tabContainer}>
-      <TouchableOpacity
-        style={[commonStyles.tab, activeTab === 'General' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
-        onPress={() => onChange('General')}
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 4 }}
+        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
       >
-        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>General</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[commonStyles.tab, activeTab === 'Teams' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
-        onPress={() => onChange('Teams')}
-      >
-        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>Teams & Roles</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[commonStyles.tab, activeTab === 'Contact' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
-        onPress={() => onChange('Contact')}
-      >
-        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>Contact</Text>
-      </TouchableOpacity>
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[
+              commonStyles.tab,
+              activeTab === tab.key && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 },
+              { paddingHorizontal: 12 }
+            ]}
+            onPress={() => handleTabPress(tab.key)}
+            onLayout={(e) => {
+              const { x, width } = e.nativeEvent.layout;
+              setTabLayouts(prev => ({ ...prev, [tab.key]: { x, width } }));
+            }}
+          >
+            <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>{tab.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 };
@@ -147,6 +178,12 @@ export default function RosterScreen() {
   const [allSports, setAllSports] = useState<Sport[]>([]);
   const [allSkills, setAllSkills] = useState<any[]>([]);
   const [allContactLabels, setAllContactLabels] = useState<any[]>([]);
+  // New v2 lookups
+  const [allAgeGroups, setAllAgeGroups] = useState<any[]>([]);
+  const [allGenders, setAllGenders] = useState<any[]>([]);
+  const [allLevels, setAllLevels] = useState<any[]>([]);
+  const [allMemberships, setAllMemberships] = useState<any[]>([]);
+  const [allPaidStatuses, setAllPaidStatuses] = useState<any[]>([]);
 
   // Edit State
   const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
@@ -156,13 +193,21 @@ export default function RosterScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [gender, setGender] = useState('');
   const [skill, setSkill] = useState('3.5');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [dominantSide, setDominantSide] = useState('R');
+  const [countryOfOrigin, setCountryOfOrigin] = useState('');
   const [shareType, setShareType] = useState('F');
   const [share, setShare] = useState('100');
+  // New v2 member fields
+  const [ageGroupIds, setAgeGroupIds] = useState<string[]>([]);
+  const [genderCategoryIds, setGenderCategoryIds] = useState<string[]>([]);
+  const [membershipId, setMembershipId] = useState<string | null>(null);
+  const [paidStatusId, setPaidStatusId] = useState<string | null>(null);
+  const [paidAmount, setPaidAmount] = useState('');
 
   // Form State - Teams [{ teamId, roleIds[], positionIds[] }]
   const [memberTeams, setMemberTeams] = useState<any[]>([]);
@@ -227,6 +272,12 @@ export default function RosterScreen() {
         setAllSports(lookups.sports || []);
         setAllSkills(lookups.skills || []);
         setAllContactLabels(lookups.contact_labels || []);
+        // New v2 lookups
+        setAllAgeGroups(lookups.age_groups || []);
+        setAllGenders(lookups.genders || []);
+        setAllLevels(lookups.levels || []);
+        setAllMemberships(lookups.memberships || []);
+        setAllPaidStatuses(lookups.paid_statuses || []);
       }
     } catch (e) {
       console.error(e);
@@ -246,11 +297,13 @@ export default function RosterScreen() {
       setFirstName(details.first_name);
       setLastName(details.last_name);
       setDisplayName(details.display_name || '');
+      setBirthDate(details.birth_date ? new Date(details.birth_date).toISOString().split('T')[0] : '');
       setGender(details.gender || 'U');
       setSkill(details.skill?.toString() || '3.5');
       setPhone((details as any).phone || '');
       setEmail((details as any).email || '');
       setDominantSide((details as any).dominant_side || 'R');
+      setCountryOfOrigin((details as any).country_of_origin || '');
       setShare(((details as any).share || 0).toString());
       setShareType((details as any).share_type || 'F');
 
@@ -258,12 +311,20 @@ export default function RosterScreen() {
         teamId: t.team_id,
         roleIds: t.roles.map((r: any) => r.role_id),
         positionIds: t.positions.map((p: any) => p.position_id),
-        skillId: t.skill_id || null
+        skillId: t.skill_id || null,
+        levelId: t.level_id || null
       }));
       setMemberTeams(mappedTeams);
 
       // Load contacts if available
       setMemberContacts((details as any).contacts || []);
+
+      // Load new v2 fields
+      setAgeGroupIds((details as any).age_group_ids || []);
+      setGenderCategoryIds((details as any).gender_category_ids || []);
+      setMembershipId((details as any).membership_id || null);
+      setPaidStatusId((details as any).paid_status_id || null);
+      setPaidAmount(((details as any).paid_amount || '').toString());
 
       setModalVisible(true);
     } catch (e) {
@@ -276,11 +337,13 @@ export default function RosterScreen() {
     setFirstName('');
     setLastName('');
     setDisplayName('');
+    setBirthDate('');
     setGender('U');
     setSkill('3.5');
     setPhone('');
     setEmail('');
     setDominantSide('R');
+    setCountryOfOrigin('');
     setShareType('F');
     setShare('100');
     setMemberTeams([]);
@@ -291,6 +354,12 @@ export default function RosterScreen() {
     setNewContactLabel('preferred');
     setEditingContactIndex(null);
     setActiveTab('General');
+    // Reset v2 fields
+    setAgeGroupIds([]);
+    setGenderCategoryIds([]);
+    setMembershipId(null);
+    setPaidStatusId(null);
+    setPaidAmount('');
   };
 
   const handleSave = async () => {
@@ -304,13 +373,21 @@ export default function RosterScreen() {
         first_name: firstName,
         last_name: lastName,
         display_name: displayName,
+        birth_date: birthDate ? new Date(birthDate).getTime() : null,
         gender,
         skill: skill || '3.5',
         dominant_side: dominantSide,
+        country_of_origin: countryOfOrigin,
         phone,
         email,
         share: parseFloat(share) || 0,
-        share_type: shareType
+        share_type: shareType,
+        // New v2 fields
+        age_group_ids: ageGroupIds,
+        gender_category_ids: genderCategoryIds,
+        membership_id: membershipId,
+        paid_status_id: paidStatusId,
+        paid_amount: paidAmount ? parseFloat(paidAmount) : null
       };
 
       if (editingMemberId) {
@@ -550,8 +627,37 @@ export default function RosterScreen() {
                     <Text style={[styles.label, { color: theme.colors.text }]}>Display Name (Optional)</Text>
                     <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]} value={displayName} onChangeText={setDisplayName} />
                   </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Date of Birth</Text>
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                      value={birthDate}
+                      onChangeText={(text) => {
+                        // Mask format: YYYY-MM-DD
+                        // Only allow numbers to be typed
+                        const cleaned = text.replace(/[^0-9]/g, '');
 
-                  {/* Gender */}
+                        let formatted = cleaned;
+                        if (cleaned.length > 4) {
+                          formatted = cleaned.substring(0, 4) + '-' + cleaned.substring(4);
+                        }
+                        if (cleaned.length > 6) {
+                          formatted = formatted.substring(0, 7) + '-' + formatted.substring(7);
+                        }
+
+                        // Limit to 10 chars (YYYY-MM-DD)
+                        setBirthDate(formatted.substring(0, 10));
+                      }}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={theme.colors.muted}
+                      maxLength={10}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </>
+              ) : activeTab === 'Participation' ? (
+                <>
+                  {/* Gender (Legacy) */}
                   <View style={styles.inputGroup}>
                     <Text style={[styles.label, { color: theme.colors.text }]}>Gender</Text>
                     <View style={styles.chipContainer}>
@@ -570,74 +676,54 @@ export default function RosterScreen() {
                     </View>
                   </View>
 
-                  {/* Dominant Side */}
+                  {/* Gender Category (v2) */}
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.colors.text }]}>Dominant Side</Text>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Gender Category</Text>
                     <View style={styles.chipContainer}>
-                      {[{ value: 'R', label: 'Right' }, { value: 'L', label: 'Left' }, { value: 'A', label: 'Ambidextrous' }].map(opt => {
-                        const isSelected = dominantSide === opt.value;
+                      {allGenders.map(g => {
+                        const isSelected = genderCategoryIds.includes(g.gender_id);
                         return (
                           <TouchableOpacity
-                            key={opt.value}
+                            key={g.gender_id}
                             style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                            onPress={() => setDominantSide(opt.value)}
+                            onPress={() => {
+                              if (isSelected) {
+                                setGenderCategoryIds(genderCategoryIds.filter(id => id !== g.gender_id));
+                              } else {
+                                setGenderCategoryIds([...genderCategoryIds, g.gender_id]);
+                              }
+                            }}
                           >
-                            <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
+                            <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{g.name}</Text>
                           </TouchableOpacity>
                         );
                       })}
                     </View>
                   </View>
 
-                  {/* Share Type */}
+                  {/* Age Group Participation (v2) */}
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.colors.text }]}>Share Type</Text>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Age Group</Text>
                     <View style={styles.chipContainer}>
-                      {[['R', 'OQ', 'OT', 'H'], ['TT', 'TQ', 'F', 'C']].map((row, rowIdx) => (
-                        <View key={rowIdx} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                          {row.map(type => {
-                            const isSelected = shareType === type;
-                            return (
-                              <TouchableOpacity
-                                key={type}
-                                style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                                onPress={() => {
-                                  setShareType(type);
-                                  // Auto-fill share value
-                                  const defaultValue = SHARE_TYPE_MAP[type];
-                                  if (defaultValue >= 0) {
-                                    setShare(defaultValue.toString());
-                                  }
-                                }}
-                              >
-                                <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      ))}
+                      {allAgeGroups.map(ag => {
+                        const isSelected = ageGroupIds.includes(ag.age_group_id);
+                        return (
+                          <TouchableOpacity
+                            key={ag.age_group_id}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => {
+                              if (isSelected) {
+                                setAgeGroupIds(ageGroupIds.filter(id => id !== ag.age_group_id));
+                              } else {
+                                setAgeGroupIds([...ageGroupIds, ag.age_group_id]);
+                              }
+                            }}
+                          >
+                            <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{ag.name}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                  </View>
-
-                  {/* Share (%) */}
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.colors.text }]}>Share (%)</Text>
-                    <TextInput
-                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 120 }]}
-                      value={share}
-                      onChangeText={val => {
-                        setShare(val);
-                        // Auto-switch to Custom if value doesn't match any predefined type
-                        const numVal = parseFloat(val);
-                        if (!isNaN(numVal)) {
-                          const matchedType = getShareTypeFromValue(numVal);
-                          setShareType(matchedType);
-                        }
-                      }}
-                      keyboardType="decimal-pad"
-                      placeholder="0"
-                      placeholderTextColor={theme.colors.muted}
-                    />
                   </View>
                 </>
               ) : activeTab === 'Teams' ? (
@@ -776,43 +862,229 @@ export default function RosterScreen() {
                           {relevantPositions.length === 0 && <Text style={{ fontSize: 10, color: theme.colors.muted }}>No positions for this sport.</Text>}
                         </View>
 
+                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Level:</Text>
+                        <View style={styles.chipContainer}>
+                          {allLevels.filter(l => l.name !== 'Open').map(l => {
+                            const active = mt.levelId === l.level_id;
+                            return (
+                              <TouchableOpacity
+                                key={l.level_id}
+                                style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                onPress={() => {
+                                  setMemberTeams(prev => prev.map(t =>
+                                    t.teamId === mt.teamId ? { ...t, levelId: active ? null : l.level_id } : t
+                                  ));
+                                }}
+                              >
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    { color: active ? theme.colors.buttonText : theme.colors.text },
+                                    active && { fontWeight: 'bold' }
+                                  ]}
+                                >
+                                  {l.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
                         <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Skill Level:</Text>
                         <View style={styles.chipContainer}>
                           {(() => {
                             // Filter skills for this team's sport
                             const relevantSkills = allSkills.filter(s => s.sport_id === team.sport_id);
-                            return relevantSkills.map(s => {
-                              const active = mt.skillId === s.skill_id;
-                              return (
-                                <TouchableOpacity
-                                  key={s.skill_id}
-                                  style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                                  onPress={() => {
-                                    setMemberTeams(prev => prev.map(t =>
-                                      t.teamId === mt.teamId ? { ...t, skillId: s.skill_id } : t
-                                    ));
-                                  }}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.chipText,
-                                      { color: active ? theme.colors.buttonText : theme.colors.text },
-                                      active && { fontWeight: 'bold' }
-                                    ]}
+                            const isKnownSkill = relevantSkills.some(s => s.skill_id === mt.skillId);
+                            // If skillId exists but is not in known skills, it's custom
+                            const isCustomSkill = !!mt.skillId && !isKnownSkill;
+
+                            return (
+                              <>
+                                {relevantSkills.map(s => {
+                                  const active = mt.skillId === s.skill_id;
+                                  return (
+                                    <TouchableOpacity
+                                      key={s.skill_id}
+                                      style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                      onPress={() => {
+                                        setMemberTeams(prev => prev.map(t =>
+                                          t.teamId === mt.teamId ? { ...t, skillId: s.skill_id } : t
+                                        ));
+                                      }}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.chipText,
+                                          { color: active ? theme.colors.buttonText : theme.colors.text },
+                                          active && { fontWeight: 'bold' }
+                                        ]}
+                                      >
+                                        {s.name}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  {/* Custom Skill Option */}
+                                  <TouchableOpacity
+                                    style={[styles.chip, isCustomSkill ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                    onPress={() => {
+                                      if (!isCustomSkill) {
+                                        setMemberTeams(prev => prev.map(t =>
+                                          t.teamId === mt.teamId ? { ...t, skillId: 'Custom' } : t
+                                        ));
+                                      } else {
+                                        setMemberTeams(prev => prev.map(t =>
+                                          t.teamId === mt.teamId ? { ...t, skillId: null } : t
+                                        ));
+                                      }
+                                    }}
                                   >
-                                    {s.name}
-                                  </Text>
-                                </TouchableOpacity>
-                              );
-                            });
+                                    <Text
+                                      style={[
+                                        styles.chipText,
+                                        { color: isCustomSkill ? theme.colors.buttonText : theme.colors.text },
+                                        isCustomSkill && { fontWeight: 'bold' }
+                                      ]}
+                                    >
+                                      Custom
+                                    </Text>
+                                  </TouchableOpacity>
+
+                                  {/* Custom Skill Input */}
+                                  {isCustomSkill && (
+                                    <TextInput
+                                      style={[
+                                        styles.chip,
+                                        {
+                                          minWidth: 60,
+                                          borderColor: theme.colors.primary,
+                                          color: theme.colors.text,
+                                          backgroundColor: theme.colors.surface,
+                                          paddingHorizontal: 8,
+                                          textAlignVertical: 'center'
+                                        }
+                                      ]}
+                                      value={mt.skillId === 'Custom' ? '' : mt.skillId}
+                                      placeholder="Enter skill"
+                                      placeholderTextColor={theme.colors.muted}
+                                      onChangeText={(text) => {
+                                        setMemberTeams(prev => prev.map(t =>
+                                          t.teamId === mt.teamId ? { ...t, skillId: text } : t
+                                        ));
+                                      }}
+                                    />
+                                  )}
+                                </View>
+                              </>
+                            );
                           })()}
-                          {allSkills.filter(s => s.sport_id === team.sport_id).length === 0 && <Text style={{ fontSize: 10, color: theme.colors.muted }}>No skills for this sport.</Text>}
                         </View>
                       </View>
                     );
                   })}
                   {memberTeams.length === 0 && <Text style={{ color: theme.colors.muted, marginTop: 20 }}>Select a team above to configure roles.</Text>}
                 </View>
+              ) : activeTab === 'Contract' ? (
+                <>
+                  {/* Share Type */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Share Type</Text>
+                    <View style={styles.chipContainer}>
+                      {[['R', 'OQ', 'OT', 'H'], ['TT', 'TQ', 'F', 'C']].map((row, rowIdx) => (
+                        <View key={rowIdx} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {row.map(type => {
+                            const isSelected = shareType === type;
+                            return (
+                              <TouchableOpacity
+                                key={type}
+                                style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                onPress={() => {
+                                  setShareType(type);
+                                  if (type !== 'C') {
+                                    setShare((SHARE_TYPE_MAP[type] || 0).toString());
+                                  }
+                                }}
+                              >
+                                <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Share Percentage - only editable for Custom */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Share (%)</Text>
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 80, textAlign: 'center' }]}
+                      value={share}
+                      editable={shareType === 'C'}
+                      onChangeText={(t) => {
+                        const num = parseInt(t) || 0;
+                        setShare(Math.min(100, Math.max(0, num)).toString());
+                      }}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor={theme.colors.muted}
+                    />
+                  </View>
+
+                  {/* Membership (v2) */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Membership</Text>
+                    <View style={styles.chipContainer}>
+                      {allMemberships.map(m => {
+                        const isSelected = membershipId === m.membership_id;
+                        return (
+                          <TouchableOpacity
+                            key={m.membership_id}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => setMembershipId(isSelected ? null : m.membership_id)}
+                          >
+                            <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{m.name}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Paid Status (v2) */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Paid Status</Text>
+                    <View style={styles.chipContainer}>
+                      {allPaidStatuses.map(ps => {
+                        const isSelected = paidStatusId === ps.paid_status_id;
+                        return (
+                          <TouchableOpacity
+                            key={ps.paid_status_id}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => setPaidStatusId(isSelected ? null : ps.paid_status_id)}
+                          >
+                            <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{ps.name}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Paid Amount (v2) */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Paid Amount ($)</Text>
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 120, textAlign: 'center' }]}
+                      value={paidAmount}
+                      onChangeText={setPaidAmount}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      placeholderTextColor={theme.colors.muted}
+                    />
+                  </View>
+                </>
               ) : activeTab === 'Contact' ? (
                 <View>
                   <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Contact Information</Text>
@@ -858,6 +1130,38 @@ export default function RosterScreen() {
                     <Text style={[styles.buttonTextBold, { color: theme.colors.buttonText }]}>Add Contact</Text>
                   </TouchableOpacity>
                 </View>
+              ) : activeTab === 'Extra' ? (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Dominant Side</Text>
+                    <View style={styles.chipContainer}>
+                      {[{ value: 'R', label: 'Right' }, { value: 'L', label: 'Left' }, { value: 'A', label: 'Ambidextrous' }].map(opt => {
+                        const isSelected = dominantSide === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                            onPress={() => setDominantSide(opt.value)}
+                          >
+                            <Text style={{ color: isSelected ? (theme.colors.buttonText as string) : (theme.colors.text as string), fontWeight: isSelected ? 'bold' : 'normal' }}>{opt.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Country of Origin */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>Country of Origin</Text>
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                      value={countryOfOrigin}
+                      onChangeText={setCountryOfOrigin}
+                      placeholder="e.g. USA, Canada"
+                      placeholderTextColor={theme.colors.muted}
+                    />
+                  </View>
+                </>
               ) : null}
             </ScrollView>
 
@@ -892,6 +1196,9 @@ export default function RosterScreen() {
           positions={allPositions}
           sports={allSports}
           skills={allSkills}
+          levels={allLevels}
+          ageGroups={allAgeGroups}
+          genders={allGenders}
         />
       </Modal>
 

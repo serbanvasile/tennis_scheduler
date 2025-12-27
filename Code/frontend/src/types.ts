@@ -41,15 +41,21 @@ export interface Member {
   last_name: string;
   display_name: string;
   gender?: string;
+  birth_date?: number;
+  age_group_id?: number | string;
+  gender_category_ids?: (number | string)[]; // multi-select for eligible categories
   skill?: number; // Added for RosterScreen compatibility
   dominant_side?: string;
   share?: number;
   share_type?: string;
   share_percentage?: number;
+  paid_amount?: number;
+  country_of_origin?: string;
+  membership_id?: number | string;
+  paid_status_id?: number | string;
   phone?: string;
   email?: string;
   role_name?: string; // from relationship
-  membership_id?: number; // ref key
   joined_date?: number;
   teams?: Team[];
   contacts?: any[];
@@ -92,6 +98,10 @@ export interface TennisEvent {
   // Enriched from xref joins (populated by GET /api/events)
   event_type_names?: string;
   system_names?: string;
+  age_group_names?: string;
+  gender_names?: string;
+  level_names?: string;
+  match_type_names?: string;
   venue_names?: string;
   court_names?: string;
   field_names?: string;
@@ -105,6 +115,10 @@ export interface TennisEvent {
   memberIds?: number[];
   eventTypeIds?: number[];
   systemIds?: number[];
+  ageGroupIds?: number[];
+  genderIds?: number[];
+  levelIds?: number[];
+  matchTypeIds?: number[];
   courtIds?: number[];
   fieldIds?: number[];
   seasonId?: number;

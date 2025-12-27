@@ -97,6 +97,8 @@ export class Member extends Model {
   set share(value: number | null) { this._setRaw('share', value); }
   get shareType() { return this._getRaw('share_type') as string | null; }
   set shareType(value: string | null) { this._setRaw('share_type', value); }
+  get paidAmount() { return this._getRaw('paid_amount') as number | null; }
+  set paidAmount(value: number | null) { this._setRaw('paid_amount', value); }
 
   // Computed property for full name
   get fullName() {
@@ -104,6 +106,9 @@ export class Member extends Model {
     if (display) return display;
     return `${this.firstName} ${this.lastName}`.trim();
   }
+
+  get countryOfOrigin() { return this._getRaw('country_of_origin') as string | null; }
+  set countryOfOrigin(value: string | null) { this._setRaw('country_of_origin', value); }
 }
 
 export class Role extends Model {
@@ -357,6 +362,8 @@ export class TeamMemberXref extends Model {
   set memberId(value: string) { this._setRaw('member_id', value); }
   get skillId() { return this._getRaw('skill_id') as string | null; }
   set skillId(value: string | null) { this._setRaw('skill_id', value); }
+  get levelId() { return this._getRaw('level_id') as string | null; }
+  set levelId(value: string | null) { this._setRaw('level_id', value); }
 }
 
 export class MemberRoleXref extends Model {
@@ -508,6 +515,138 @@ export class TeamSeasonXref extends Model {
 }
 
 // ============================================================================
+// NEW MAPPING MODELS (v2)
+// ============================================================================
+
+export class AgeGroup extends Model {
+  static table = 'age_groups';
+  get guid() { return this._getRaw('guid') as string | null; }
+  get name() { return this._getRaw('name') as string; }
+  set name(value: string) { this._setRaw('name', value); }
+  get sortOrder() { return this._getRaw('sort_order') as number | null; }
+  set sortOrder(value: number | null) { this._setRaw('sort_order', value); }
+}
+
+export class Gender extends Model {
+  static table = 'genders';
+  get guid() { return this._getRaw('guid') as string | null; }
+  get name() { return this._getRaw('name') as string; }
+  set name(value: string) { this._setRaw('name', value); }
+  get sortOrder() { return this._getRaw('sort_order') as number | null; }
+  set sortOrder(value: number | null) { this._setRaw('sort_order', value); }
+}
+
+export class Level extends Model {
+  static table = 'levels';
+  get guid() { return this._getRaw('guid') as string | null; }
+  get name() { return this._getRaw('name') as string; }
+  set name(value: string) { this._setRaw('name', value); }
+  get sortOrder() { return this._getRaw('sort_order') as number | null; }
+  set sortOrder(value: number | null) { this._setRaw('sort_order', value); }
+}
+
+export class MatchType extends Model {
+  static table = 'match_types';
+  get guid() { return this._getRaw('guid') as string | null; }
+  get name() { return this._getRaw('name') as string; }
+  set name(value: string) { this._setRaw('name', value); }
+  get sportId() { return this._getRaw('sport_id') as string | null; }
+  set sportId(value: string | null) { this._setRaw('sport_id', value); }
+  get sortOrder() { return this._getRaw('sort_order') as number | null; }
+  set sortOrder(value: number | null) { this._setRaw('sort_order', value); }
+}
+
+export class Membership extends Model {
+  static table = 'memberships';
+  get guid() { return this._getRaw('guid') as string | null; }
+  get name() { return this._getRaw('name') as string; }
+  set name(value: string) { this._setRaw('name', value); }
+  get sortOrder() { return this._getRaw('sort_order') as number | null; }
+  set sortOrder(value: number | null) { this._setRaw('sort_order', value); }
+}
+
+export class PaidStatus extends Model {
+  static table = 'paid_statuses';
+  get guid() { return this._getRaw('guid') as string | null; }
+  get name() { return this._getRaw('name') as string; }
+  set name(value: string) { this._setRaw('name', value); }
+  get sortOrder() { return this._getRaw('sort_order') as number | null; }
+  set sortOrder(value: number | null) { this._setRaw('sort_order', value); }
+}
+
+// ============================================================================
+// NEW CROSS-REFERENCE MODELS (v2) - Events
+// ============================================================================
+
+export class EventAgeGroupXref extends Model {
+  static table = 'event_age_group_xref';
+  get eventId() { return this._getRaw('event_id') as string; }
+  set eventId(value: string) { this._setRaw('event_id', value); }
+  get ageGroupId() { return this._getRaw('age_group_id') as string; }
+  set ageGroupId(value: string) { this._setRaw('age_group_id', value); }
+}
+
+export class EventGenderXref extends Model {
+  static table = 'event_gender_xref';
+  get eventId() { return this._getRaw('event_id') as string; }
+  set eventId(value: string) { this._setRaw('event_id', value); }
+  get genderId() { return this._getRaw('gender_id') as string; }
+  set genderId(value: string) { this._setRaw('gender_id', value); }
+}
+
+export class EventLevelXref extends Model {
+  static table = 'event_level_xref';
+  get eventId() { return this._getRaw('event_id') as string; }
+  set eventId(value: string) { this._setRaw('event_id', value); }
+  get levelId() { return this._getRaw('level_id') as string; }
+  set levelId(value: string) { this._setRaw('level_id', value); }
+}
+
+export class EventMatchTypeXref extends Model {
+  static table = 'event_match_type_xref';
+  get eventId() { return this._getRaw('event_id') as string; }
+  set eventId(value: string) { this._setRaw('event_id', value); }
+  get matchTypeId() { return this._getRaw('match_type_id') as string; }
+  set matchTypeId(value: string) { this._setRaw('match_type_id', value); }
+}
+
+// ============================================================================
+// NEW CROSS-REFERENCE MODELS (v2) - Members
+// ============================================================================
+
+export class MemberAgeGroupXref extends Model {
+  static table = 'member_age_group_xref';
+  get memberId() { return this._getRaw('member_id') as string; }
+  set memberId(value: string) { this._setRaw('member_id', value); }
+  get ageGroupId() { return this._getRaw('age_group_id') as string; }
+  set ageGroupId(value: string) { this._setRaw('age_group_id', value); }
+}
+
+export class MemberGenderXref extends Model {
+  static table = 'member_gender_xref';
+  get memberId() { return this._getRaw('member_id') as string; }
+  set memberId(value: string) { this._setRaw('member_id', value); }
+  get genderId() { return this._getRaw('gender_id') as string; }
+  set genderId(value: string) { this._setRaw('gender_id', value); }
+}
+
+export class MemberMembershipXref extends Model {
+  static table = 'member_membership_xref';
+  get memberId() { return this._getRaw('member_id') as string; }
+  set memberId(value: string) { this._setRaw('member_id', value); }
+  get membershipId() { return this._getRaw('membership_id') as string; }
+  set membershipId(value: string) { this._setRaw('membership_id', value); }
+}
+
+export class MemberPaidStatusXref extends Model {
+  static table = 'member_paid_status_xref';
+  get memberId() { return this._getRaw('member_id') as string; }
+  set memberId(value: string) { this._setRaw('member_id', value); }
+  get paidStatusId() { return this._getRaw('paid_status_id') as string; }
+  set paidStatusId(value: string) { this._setRaw('paid_status_id', value); }
+}
+
+// ============================================================================
 // MODEL CLASSES ARRAY (for database initialization)
 // ============================================================================
 
@@ -555,4 +694,21 @@ export const modelClasses = [
   TeamContactXref,
   SportSeasonXref,
   TeamSeasonXref,
+  // New mapping models (v2)
+  AgeGroup,
+  Gender,
+  Level,
+  MatchType,
+  Membership,
+  PaidStatus,
+  // New xref models (v2) - Events
+  EventAgeGroupXref,
+  EventGenderXref,
+  EventLevelXref,
+  EventMatchTypeXref,
+  // New xref models (v2) - Members
+  MemberAgeGroupXref,
+  MemberGenderXref,
+  MemberMembershipXref,
+  MemberPaidStatusXref,
 ];

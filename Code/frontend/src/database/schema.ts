@@ -11,7 +11,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // create_user, create_date, update_user, update_date, deleted_flag
 
 export const schema = appSchema({
-  version: 1,
+  version: 3,
   tables: [
     // ============================================================================
     // CORE TABLES
@@ -93,6 +93,8 @@ export const schema = appSchema({
         { name: 'dominant_side', type: 'string', isOptional: true }, // 'L', 'R', 'A'
         { name: 'share', type: 'number', isOptional: true },
         { name: 'share_type', type: 'string', isOptional: true },
+        { name: 'paid_amount', type: 'number', isOptional: true },
+        { name: 'country_of_origin', type: 'string', isOptional: true },
         { name: 'create_user', type: 'string', isOptional: true },
         { name: 'create_date', type: 'number', isOptional: true },
         { name: 'update_user', type: 'string', isOptional: true },
@@ -412,6 +414,7 @@ export const schema = appSchema({
         { name: 'team_id', type: 'string', isIndexed: true },
         { name: 'member_id', type: 'string', isIndexed: true },
         { name: 'skill_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'level_id', type: 'string', isOptional: true, isIndexed: true },
         { name: 'create_user', type: 'string', isOptional: true },
         { name: 'create_date', type: 'number', isOptional: true },
         { name: 'update_user', type: 'string', isOptional: true },
@@ -647,6 +650,221 @@ export const schema = appSchema({
       columns: [
         { name: 'team_id', type: 'string', isIndexed: true },
         { name: 'season_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // ============================================================================
+    // NEW MAPPING TABLES (v2)
+    // ============================================================================
+
+    // age_groups
+    tableSchema({
+      name: 'age_groups',
+      columns: [
+        { name: 'guid', type: 'string', isOptional: true },
+        { name: 'name', type: 'string' },
+        { name: 'sort_order', type: 'number', isOptional: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // genders (Men, Women, Boys, Girls, Mixed, Open)
+    tableSchema({
+      name: 'genders',
+      columns: [
+        { name: 'guid', type: 'string', isOptional: true },
+        { name: 'name', type: 'string' },
+        { name: 'sort_order', type: 'number', isOptional: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // levels (Amateur, Pro, Open)
+    tableSchema({
+      name: 'levels',
+      columns: [
+        { name: 'guid', type: 'string', isOptional: true },
+        { name: 'name', type: 'string' },
+        { name: 'sort_order', type: 'number', isOptional: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // match_types (Singles, Doubles for racquet; Match for others)
+    tableSchema({
+      name: 'match_types',
+      columns: [
+        { name: 'guid', type: 'string', isOptional: true },
+        { name: 'name', type: 'string' },
+        { name: 'sport_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'sort_order', type: 'number', isOptional: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // memberships (Member, Non-Member)
+    tableSchema({
+      name: 'memberships',
+      columns: [
+        { name: 'guid', type: 'string', isOptional: true },
+        { name: 'name', type: 'string' },
+        { name: 'sort_order', type: 'number', isOptional: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // paid_statuses (Paid, Not Paid)
+    tableSchema({
+      name: 'paid_statuses',
+      columns: [
+        { name: 'guid', type: 'string', isOptional: true },
+        { name: 'name', type: 'string' },
+        { name: 'sort_order', type: 'number', isOptional: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // ============================================================================
+    // NEW CROSS-REFERENCE TABLES (v2) - Events
+    // ============================================================================
+
+    // event_age_group_xref
+    tableSchema({
+      name: 'event_age_group_xref',
+      columns: [
+        { name: 'event_id', type: 'string', isIndexed: true },
+        { name: 'age_group_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // event_gender_xref
+    tableSchema({
+      name: 'event_gender_xref',
+      columns: [
+        { name: 'event_id', type: 'string', isIndexed: true },
+        { name: 'gender_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // event_level_xref
+    tableSchema({
+      name: 'event_level_xref',
+      columns: [
+        { name: 'event_id', type: 'string', isIndexed: true },
+        { name: 'level_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // event_match_type_xref
+    tableSchema({
+      name: 'event_match_type_xref',
+      columns: [
+        { name: 'event_id', type: 'string', isIndexed: true },
+        { name: 'match_type_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // ============================================================================
+    // NEW CROSS-REFERENCE TABLES (v2) - Members
+    // ============================================================================
+
+    // member_age_group_xref
+    tableSchema({
+      name: 'member_age_group_xref',
+      columns: [
+        { name: 'member_id', type: 'string', isIndexed: true },
+        { name: 'age_group_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // member_gender_xref (multi-select for eligible categories)
+    tableSchema({
+      name: 'member_gender_xref',
+      columns: [
+        { name: 'member_id', type: 'string', isIndexed: true },
+        { name: 'gender_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // member_membership_xref
+    tableSchema({
+      name: 'member_membership_xref',
+      columns: [
+        { name: 'member_id', type: 'string', isIndexed: true },
+        { name: 'membership_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // member_paid_status_xref
+    tableSchema({
+      name: 'member_paid_status_xref',
+      columns: [
+        { name: 'member_id', type: 'string', isIndexed: true },
+        { name: 'paid_status_id', type: 'string', isIndexed: true },
         { name: 'create_user', type: 'string', isOptional: true },
         { name: 'create_date', type: 'number', isOptional: true },
         { name: 'update_user', type: 'string', isOptional: true },

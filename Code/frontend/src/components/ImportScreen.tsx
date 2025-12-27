@@ -42,6 +42,9 @@ interface ImportScreenProps {
   positions: Position[];
   sports: Sport[];
   skills: any[];
+  levels: any[];
+  ageGroups: any[];
+  genders: any[];
 }
 
 export const ImportScreen: React.FC<ImportScreenProps> = ({
@@ -51,7 +54,10 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
   roles,
   positions,
   sports,
-  skills
+  skills,
+  levels,
+  ageGroups,
+  genders
 }) => {
   const [clipboardData, setClipboardData] = useState('');
   const [parsedMembers, setParsedMembers] = useState<ParsedMember[]>([]);
@@ -64,6 +70,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
   const [selectedPositionIds, setSelectedPositionIds] = useState<number[]>([]);
+  const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
 
   const sampleData = `#\tNAME\tGender\tShare\tCell\tLevel
 1\tAlex Johnson\tM\tTQ\t(555) 123-4567\t3.5
@@ -186,6 +193,11 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
       return;
     }
 
+    if (!selectedLevelId) {
+      Alert.alert('Error', 'Please select a level for imported members.');
+      return;
+    }
+
     setIsImporting(true);
     try {
       // Import members one by one with team/role/position assignments
@@ -258,6 +270,10 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
           }
 
           // Create member with new fields AND team/role/position/contacts assignments
+          // Get defaults for v2 fields
+          const ageGroupIds = getDefaultAgeGroupParticipation();
+          const genderCategoryIds = getDefaultGenderParticipation(member.gender);
+
           const result = await databaseService.createMember(
             {
               first_name: firstName,
@@ -266,9 +282,12 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
               gender: member.gender,
               dominant_side: member.handed,
               share: member.sharePercentage,
-              share_type: member.shareType
+              share_type: member.shareType,
+              // New v2 fields with defaults
+              age_group_ids: ageGroupIds,
+              gender_category_ids: genderCategoryIds
             },
-            [{ teamId: selectedTeamId, roleIds: memberRoleIds, positionIds: selectedPositionIds, skillId }],
+            [{ teamId: selectedTeamId, roleIds: memberRoleIds, positionIds: selectedPositionIds, skillId, levelId: selectedLevelId }],
             contacts
           );
 
@@ -340,7 +359,34 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
     );
   };
 
-  const canImport = selectedTeamId && selectedRoleIds.length > 0 && selectedPositionIds.length > 0 && parsedMembers.length > 0;
+  // Helper function to get default gender participation based on member gender
+  const getDefaultGenderParticipation = (memberGender: string): string[] => {
+    // Find gender IDs
+    const menGender = genders.find((g: any) => g.name === 'Men');
+    const womenGender = genders.find((g: any) => g.name === 'Women');
+    const mixedGender = genders.find((g: any) => g.name === 'Mixed');
+    const openGender = genders.find((g: any) => g.name === 'Open');
+
+    const ids: string[] = [];
+    if (memberGender === 'M') {
+      if (menGender) ids.push(menGender.gender_id);
+      if (mixedGender) ids.push(mixedGender.gender_id);
+      if (openGender) ids.push(openGender.gender_id);
+    } else if (memberGender === 'F') {
+      if (womenGender) ids.push(womenGender.gender_id);
+      if (mixedGender) ids.push(mixedGender.gender_id);
+      if (openGender) ids.push(openGender.gender_id);
+    }
+    return ids;
+  };
+
+  // Get default Adult age group ID
+  const getDefaultAgeGroupParticipation = (): string[] => {
+    const adultAgeGroup = ageGroups.find((ag: any) => ag.name === 'Adult');
+    return adultAgeGroup ? [adultAgeGroup.age_group_id] : [];
+  };
+
+  const canImport = selectedTeamId && selectedRoleIds.length > 0 && selectedPositionIds.length > 0 && selectedLevelId && parsedMembers.length > 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center' }}>
@@ -470,6 +516,29 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
                 ) : (
                   <Text style={{ color: theme.colors.muted }}>Select a team first to see positions.</Text>
                 )}
+
+                {/* Level Selection (Amateur/Pro only) */}
+                <Text style={[styles.subLabel, { color: theme.colors.text }]}>Select Level *</Text>
+                <View style={styles.chipContainer}>
+                  {levels.filter((l: any) => l.name !== 'Open').map((level: any) => (
+                    <TouchableOpacity
+                      key={level.level_id}
+                      style={[
+                        styles.chip,
+                        { borderColor: theme.colors.border },
+                        selectedLevelId === level.level_id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                      ]}
+                      onPress={() => setSelectedLevelId(selectedLevelId === level.level_id ? null : level.level_id)}
+                    >
+                      <Text style={[
+                        { color: theme.colors.text },
+                        selectedLevelId === level.level_id && { color: theme.colors.buttonText, fontWeight: 'bold' }
+                      ]}>
+                        {level.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             )}
 
