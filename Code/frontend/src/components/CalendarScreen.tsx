@@ -245,6 +245,20 @@ export default function CalendarScreen() {
   const [previewLastCount, setPreviewLastCount] = useState(4);
 
   // Confirmation modal for delete all
+  // State for reset warning
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+
+  // Helper to handle form updates with player reset check
+  const updateFormWithReset = (updates: Partial<EventFormState>) => {
+    // Check if we are intentionally resetting members (memberIds explicitly set to [])
+    // AND we actually had members selected before (using current formState)
+    if (updates.memberIds && updates.memberIds.length === 0 && formState.memberIds.length > 0) {
+      setResetMessage("Players selection reset due to filter change");
+      setTimeout(() => setResetMessage(null), 3000);
+    }
+    setFormState(prev => ({ ...prev, ...updates }));
+  };
+
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ title: '', message: '', onConfirm: () => { }, onCancel: () => { }, isDestructive: false, confirmLabel: undefined as string | undefined, cancelLabel: undefined as string | undefined });
 
@@ -734,6 +748,9 @@ export default function CalendarScreen() {
 
   const renderForm = () => (
     <ScrollView style={styles.formScroll}>
+      {/* Global Warning Message */}
+      {/* General Tab */}
+
       {/* General Tab */}
       {activeTab === 'General' && (
         <>
@@ -853,10 +870,10 @@ export default function CalendarScreen() {
                     { borderColor: theme.colors.border },
                     formState.ageGroupIds.includes(ag.age_group_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                   ]}
-                  onPress={() => setFormState(prev => ({
-                    ...prev,
-                    ageGroupIds: prev.ageGroupIds.includes(ag.age_group_id) ? [] : [ag.age_group_id]
-                  }))}
+                  onPress={() => updateFormWithReset({
+                    ageGroupIds: formState.ageGroupIds.includes(ag.age_group_id) ? [] : [ag.age_group_id],
+                    memberIds: [] // Reset players on filter change
+                  })}
                 >
                   <Text style={[
                     styles.chipText,
@@ -867,7 +884,7 @@ export default function CalendarScreen() {
               ))}
             </View>
 
-            <Text style={[styles.label, { color: theme.colors.text }]}>Gender</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Gender Category</Text>
             <View style={styles.chipContainer}>
               {genders.map(g => (
                 <TouchableOpacity
@@ -877,10 +894,10 @@ export default function CalendarScreen() {
                     { borderColor: theme.colors.border },
                     formState.genderIds.includes(g.gender_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                   ]}
-                  onPress={() => setFormState(prev => ({
-                    ...prev,
-                    genderIds: prev.genderIds.includes(g.gender_id) ? [] : [g.gender_id]
-                  }))}
+                  onPress={() => updateFormWithReset({
+                    genderIds: formState.genderIds.includes(g.gender_id) ? [] : [g.gender_id],
+                    memberIds: [] // Reset players on filter change
+                  })}
                 >
                   <Text style={[
                     styles.chipText,
@@ -901,40 +918,16 @@ export default function CalendarScreen() {
                     { borderColor: theme.colors.border },
                     formState.levelIds.includes(l.level_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                   ]}
-                  onPress={() => setFormState(prev => ({
-                    ...prev,
-                    levelIds: prev.levelIds.includes(l.level_id) ? [] : [l.level_id]
-                  }))}
+                  onPress={() => updateFormWithReset({
+                    levelIds: formState.levelIds.includes(l.level_id) ? [] : [l.level_id],
+                    memberIds: [] // Reset players on filter change
+                  })}
                 >
                   <Text style={[
                     styles.chipText,
                     { color: theme.colors.text },
                     formState.levelIds.includes(l.level_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
                   ]}>{l.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.label, { color: theme.colors.text }]}>Match Type</Text>
-            <View style={styles.chipContainer}>
-              {matchTypes.map(mt => (
-                <TouchableOpacity
-                  key={mt.match_type_id}
-                  style={[
-                    styles.chip,
-                    { borderColor: theme.colors.border },
-                    formState.matchTypeIds.includes(mt.match_type_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                  ]}
-                  onPress={() => setFormState(prev => ({
-                    ...prev,
-                    matchTypeIds: prev.matchTypeIds.includes(mt.match_type_id) ? [] : [mt.match_type_id]
-                  }))}
-                >
-                  <Text style={[
-                    styles.chipText,
-                    { color: theme.colors.text },
-                    formState.matchTypeIds.includes(mt.match_type_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
-                  ]}>{mt.name}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1310,14 +1303,11 @@ export default function CalendarScreen() {
                       key={`selected-${team.team_id}`}
                       style={[styles.chip, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
                       onPress={() => {
-                        // Remove team and its associated members
-                        const teamMembers = members.filter(m =>
-                          (m as any).teams?.some((t: any) => t.team_id === team.team_id)
-                        ).map(m => m.member_id);
+                        // Remove team and its associated members (reset all players logic)
                         setFormState(prev => ({
                           ...prev,
                           teamIds: prev.teamIds.filter(id => id !== team.team_id),
-                          memberIds: prev.memberIds.filter(mid => !teamMembers.includes(mid))
+                          memberIds: [] // Reset players on filter change
                         }));
                       }}
                     >
@@ -1349,7 +1339,12 @@ export default function CalendarScreen() {
             {teamSearchChips.length > 0 && (
               <View style={styles.chipContainer}>
                 {filterItemsByChips(
-                  teams,
+                  teams.filter(t => {
+                    // Filter to strictly allow only teams of the same sport as the first selected team
+                    if (formState.teamIds.length === 0) return true;
+                    const firstTeam = teams.find(team => team.team_id === formState.teamIds[0]);
+                    return !firstTeam || !t.sport_id || t.sport_id === firstTeam.sport_id;
+                  }),
                   teamSearchChips,
                   (t) => `${t.name} ${t.sport_name || ''}`,
                   teamSearchMode
@@ -1365,14 +1360,10 @@ export default function CalendarScreen() {
                       if (formState.teamIds.includes(team.team_id)) {
                         // Removing team - check for confirmation if editing existing event
                         const handleRemove = () => {
-                          const teamMembers = members.filter(m =>
-                            (m as any).teams?.some((t: any) => t.team_id === team.team_id)
-                          ).map(m => m.member_id);
-                          setFormState(prev => ({
-                            ...prev,
-                            teamIds: prev.teamIds.filter(id => id !== team.team_id),
-                            memberIds: prev.memberIds.filter(mid => !teamMembers.includes(mid))
-                          }));
+                          updateFormWithReset({
+                            teamIds: formState.teamIds.filter(id => id !== team.team_id),
+                            memberIds: [] // Reset players on filter change
+                          });
                         };
 
                         if (editingEventId) {
@@ -1404,7 +1395,10 @@ export default function CalendarScreen() {
                         }
                       } else {
                         // Adding team
-                        setFormState(prev => ({ ...prev, teamIds: [...prev.teamIds, team.team_id] }));
+                        updateFormWithReset({
+                          teamIds: [...formState.teamIds, team.team_id],
+                          memberIds: [] // Reset players on filter change
+                        });
                       }
                     }}
                   >
@@ -1427,14 +1421,48 @@ export default function CalendarScreen() {
             {teamSearchChips.length === 0 && formState.teamIds.length === 0 && (
               <Text style={{ color: theme.colors.muted, fontStyle: 'italic' }}>Search to add teams</Text>
             )}
+
+            {/* Match Type (moved here) - only show if teams are selected */}
+            {formState.teamIds.length > 0 && (
+              <View style={{ marginTop: 16 }}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>Match Type</Text>
+                <View style={styles.chipContainer}>
+                  {matchTypes.filter(mt => {
+                    if (formState.teamIds.length === 0) return true;
+                    const firstTeam = teams.find(t => t.team_id === formState.teamIds[0]);
+                    // Show if match type has no sport (global) or matches team's sport
+                    // Use loose equality for safety with potential string/number ID mismatches
+                    return !mt.sport_id || (firstTeam?.sport_id && mt.sport_id == firstTeam.sport_id);
+                  }).map(mt => (
+                    <TouchableOpacity
+                      key={mt.match_type_id}
+                      style={[
+                        styles.chip,
+                        { borderColor: theme.colors.border },
+                        formState.matchTypeIds.includes(mt.match_type_id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                      ]}
+                      onPress={() => updateFormWithReset({
+                        matchTypeIds: formState.matchTypeIds.includes(mt.match_type_id) ? [] : [mt.match_type_id],
+                        memberIds: [] // Reset players on filter change
+                      })}
+                    >
+                      <Text style={[
+                        styles.chipText,
+                        { color: theme.colors.text },
+                        formState.matchTypeIds.includes(mt.match_type_id) && { color: theme.colors.buttonText, fontWeight: 'bold' }
+                      ]}>{mt.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Members (only if teams selected) */}
           {formState.teamIds.length > 0 && (
             <View style={[styles.section, { borderBottomColor: theme.colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Members
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Players
               </Text>
-
               {/* Selected Members - always show assigned members */}
               {formState.memberIds.length > 0 && (
                 <View style={{ marginBottom: 12 }}>
@@ -1469,9 +1497,50 @@ export default function CalendarScreen() {
                 resultCount={filterItemsByChips(
                   members.filter(m => {
                     const memberTeams = (m as any).teams || [];
-                    return formState.teamIds.some(teamId =>
+                    // 1. Must belong to selected teams
+                    const inTeam = formState.teamIds.some(teamId =>
                       memberTeams.some((t: any) => t.team_id === teamId)
                     );
+                    if (!inTeam) return false;
+
+                    // 2. Filter by Gender Category
+                    if (formState.genderIds.length > 0) {
+                      const memberGenderCats = (m as any).gender_category_ids || [];
+                      const hasGender = formState.genderIds.some(id => memberGenderCats.includes(id));
+                      // Also check legacy gender
+                      const legacyMatch = formState.genderIds.some(id => {
+                        const genderName = genders.find(g => g.gender_id === id)?.name?.toLowerCase();
+                        return genderName && (
+                          (genderName === 'male' && m.gender === 'M') ||
+                          (genderName === 'female' && m.gender === 'F')
+                        );
+                      });
+                      if (!hasGender && !legacyMatch) return false;
+                    }
+
+                    // 3. Filter by Age Group
+                    if (formState.ageGroupIds.length > 0) {
+                      const memberAgeGroups = (m as any).age_group_ids || [];
+                      const hasAgeGroup = formState.ageGroupIds.some(id => memberAgeGroups.includes(id));
+                      // Also check birth date if available (simple check)
+                      // ... improved logic could be added here
+                      if (!hasAgeGroup) return false;
+                    }
+
+                    // 4. Filter by Level
+                    if (formState.levelIds.length > 0) {
+                      // Level is associated with the team_member_xref
+                      const memberTeams = (m as any).teams || [];
+                      // Check if member has the selected level in ANY of the selected teams
+                      const hasLevel = formState.levelIds.some(levelId =>
+                        memberTeams.some((t: any) =>
+                          formState.teamIds.includes(t.team_id) && t.level_id === levelId
+                        )
+                      );
+                      if (!hasLevel) return false;
+                    }
+
+                    return true;
                   }),
                   memberSearchChips,
                   (m) => {
@@ -1487,9 +1556,59 @@ export default function CalendarScreen() {
                 ).length}
                 totalCount={members.filter(m => {
                   const memberTeams = (m as any).teams || [];
-                  return formState.teamIds.some(teamId =>
+                  // 1. Must belong to selected teams
+                  const inTeam = formState.teamIds.some(teamId =>
                     memberTeams.some((t: any) => t.team_id === teamId)
                   );
+                  if (!inTeam) return false;
+
+                  // 2. Filter by Gender Category
+                  if (formState.genderIds.length > 0) {
+                    const memberGenderCats = (m as any).gender_category_ids || [];
+                    const hasGender = formState.genderIds.some(id => memberGenderCats.includes(id));
+                    const legacyMatch = formState.genderIds.some(id => {
+                      const genderName = genders.find(g => g.gender_id === id)?.name?.toLowerCase();
+                      return genderName && (
+                        (genderName === 'male' && m.gender === 'M') ||
+                        (genderName === 'female' && m.gender === 'F')
+                      );
+                    });
+                    if (!hasGender && !legacyMatch) return false;
+                  }
+
+                  // 3. Filter by Age Group
+                  if (formState.ageGroupIds.length > 0) {
+                    const memberAgeGroups = (m as any).age_group_ids || [];
+                    const hasAgeGroup = formState.ageGroupIds.some(id => memberAgeGroups.includes(id));
+                    if (!hasAgeGroup) return false;
+                  }
+
+                  // 4. Filter by Level
+                  if (formState.levelIds.length > 0) {
+                    const memberTeams = (m as any).teams || [];
+                    const hasLevel = formState.levelIds.some(levelId =>
+                      memberTeams.some((t: any) =>
+                        formState.teamIds.includes(t.team_id) && t.level_id === levelId
+                      )
+                    );
+                    if (!hasLevel) return false;
+                  }
+
+                  // 5. Filter by Match Type (mapped to Positions)
+                  if (formState.matchTypeIds.length > 0) {
+                    const selectedMatchTypes = matchTypes.filter(mt => formState.matchTypeIds.includes(mt.match_type_id));
+                    const matchTypeNames = selectedMatchTypes.map(mt => mt.name.toLowerCase());
+
+                    const memberTeams = (m as any).teams || [];
+                    const hasPositionMatch = memberTeams.some((t: any) =>
+                      formState.teamIds.includes(t.team_id) &&
+                      (t.positions || []).some((pos: any) => matchTypeNames.includes(pos.name.toLowerCase()))
+                    );
+
+                    if (!hasPositionMatch) return false;
+                  }
+
+                  return true;
                 }).length}
               />
 
@@ -1499,9 +1618,59 @@ export default function CalendarScreen() {
                   {filterItemsByChips(
                     members.filter(m => {
                       const memberTeams = (m as any).teams || [];
-                      return formState.teamIds.some(teamId =>
+                      // 1. Must belong to selected teams
+                      const inTeam = formState.teamIds.some(teamId =>
                         memberTeams.some((t: any) => t.team_id === teamId)
                       );
+                      if (!inTeam) return false;
+
+                      // 2. Filter by Gender Category
+                      if (formState.genderIds.length > 0) {
+                        const memberGenderCats = (m as any).gender_category_ids || [];
+                        const hasGender = formState.genderIds.some(id => memberGenderCats.includes(id));
+                        const legacyMatch = formState.genderIds.some(id => {
+                          const genderName = genders.find(g => g.gender_id === id)?.name?.toLowerCase();
+                          return genderName && (
+                            (genderName === 'male' && m.gender === 'M') ||
+                            (genderName === 'female' && m.gender === 'F')
+                          );
+                        });
+                        if (!hasGender && !legacyMatch) return false;
+                      }
+
+                      // 3. Filter by Age Group
+                      if (formState.ageGroupIds.length > 0) {
+                        const memberAgeGroups = (m as any).age_group_ids || [];
+                        const hasAgeGroup = formState.ageGroupIds.some(id => memberAgeGroups.includes(id));
+                        if (!hasAgeGroup) return false;
+                      }
+
+                      // 4. Filter by Level
+                      if (formState.levelIds.length > 0) {
+                        const memberTeams = (m as any).teams || [];
+                        const hasLevel = formState.levelIds.some(levelId =>
+                          memberTeams.some((t: any) =>
+                            formState.teamIds.includes(t.team_id) && t.level_id === levelId
+                          )
+                        );
+                        if (!hasLevel) return false;
+                      }
+
+                      // 5. Filter by Match Type (mapped to Positions)
+                      if (formState.matchTypeIds.length > 0) {
+                        const selectedMatchTypes = matchTypes.filter(mt => formState.matchTypeIds.includes(mt.match_type_id));
+                        const matchTypeNames = selectedMatchTypes.map(mt => mt.name.toLowerCase());
+
+                        const memberTeams = (m as any).teams || [];
+                        const hasPositionMatch = memberTeams.some((t: any) =>
+                          formState.teamIds.includes(t.team_id) &&
+                          (t.positions || []).some((pos: any) => matchTypeNames.includes(pos.name.toLowerCase()))
+                        );
+
+                        if (!hasPositionMatch) return false;
+                      }
+
+                      return true;
                     }),
                     memberSearchChips,
                     (m) => {
@@ -1562,8 +1731,9 @@ export default function CalendarScreen() {
             </View>
           )}
         </>
-      )}
-    </ScrollView>
+      )
+      }
+    </ScrollView >
   );
 
   return (
@@ -1652,6 +1822,23 @@ export default function CalendarScreen() {
             <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>
               {editingEventId ? 'Edit Event' : 'New Event'}
             </Text>
+            {resetMessage && (
+              <View style={{
+                backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                borderColor: '#ffc107',
+                borderWidth: 1,
+                borderRadius: 4,
+                padding: 12,
+                marginHorizontal: 16,
+                marginBottom: 8,
+                flexDirection: 'row',
+                alignItems: 'center'
+              }}>
+                <Text style={{ color: theme.colors.text, fontSize: 13, flex: 1, fontWeight: '500' }}>
+                  ⚠️ {resetMessage}
+                </Text>
+              </View>
+            )}
             <Tabs activeTab={activeTab} onChange={setActiveTab} />
             {renderForm()}
             <View style={styles.modalButtons}>

@@ -37,7 +37,7 @@ const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: stri
     { key: 'Teams', label: 'Teams & Roles' },
     { key: 'Contract', label: 'Contract' },
     { key: 'Contact', label: 'Contact' },
-    { key: 'Extra', label: 'Extra' }
+    { key: 'Other', label: 'Other' }
   ];
 
   const handleTabPress = (key: string) => {
@@ -1130,7 +1130,7 @@ export default function RosterScreen() {
                     <Text style={[styles.buttonTextBold, { color: theme.colors.buttonText }]}>Add Contact</Text>
                   </TouchableOpacity>
                 </View>
-              ) : activeTab === 'Extra' ? (
+              ) : activeTab === 'Other' ? (
                 <>
                   <View style={styles.inputGroup}>
                     <Text style={[styles.label, { color: theme.colors.text }]}>Dominant Side</Text>

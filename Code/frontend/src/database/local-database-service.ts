@@ -522,10 +522,14 @@ class LocalDatabaseService {
                             )
                         ).fetch();
                         const positionNames: string[] = [];
+                        const positions: { id: string; name: string }[] = [];
                         for (const px of posXrefs) {
                             try {
                                 const pos = await database.get<any>('positions').find(px.positionId);
-                                if (pos) positionNames.push(pos.name);
+                                if (pos) {
+                                    positionNames.push(pos.name);
+                                    positions.push({ id: pos.id, name: pos.name });
+                                }
                             } catch { }
                         }
 
@@ -534,8 +538,10 @@ class LocalDatabaseService {
                             team_name: team.name,
                             sport_name: sportName,
                             skill_id: xref.skillId,
+                            level_id: xref.levelId, // Include level_id for filtering
                             role_names: roleNames.join(','),
                             position_names: positionNames.join(','),
+                            positions, // Include structured positions for Match Type filtering
                         });
                     } catch { }
                 }
@@ -563,6 +569,30 @@ class LocalDatabaseService {
                     } catch { }
                 }
 
+                // Get age group xrefs (v2) - multi-select
+                const ageGroupXrefs = await database.get<MemberAgeGroupXref>('member_age_group_xref').query(
+                    Q.where('member_id', member.id)
+                ).fetch();
+                const ageGroupIds = ageGroupXrefs.map((x: any) => x.ageGroupId);
+
+                // Get gender xrefs (v2) - multi-select
+                const genderXrefs = await database.get<MemberGenderXref>('member_gender_xref').query(
+                    Q.where('member_id', member.id)
+                ).fetch();
+                const genderCategoryIds = genderXrefs.map((x: any) => x.genderId);
+
+                // Get membership xref (v2)
+                const membershipXrefs = await database.get<MemberMembershipXref>('member_membership_xref').query(
+                    Q.where('member_id', member.id)
+                ).fetch();
+                const membershipId = membershipXrefs.length > 0 ? membershipXrefs[0].membershipId : undefined;
+
+                // Get paid status xref (v2)
+                const paidStatusXrefs = await database.get<MemberPaidStatusXref>('member_paid_status_xref').query(
+                    Q.where('member_id', member.id)
+                ).fetch();
+                const paidStatusId = paidStatusXrefs.length > 0 ? paidStatusXrefs[0].paidStatusId : undefined;
+
                 return {
                     member_id: member.id, // Use string ID - parseInt fails on UUID strings
                     guid: member.guid || '',
@@ -577,6 +607,13 @@ class LocalDatabaseService {
                     email,
                     teams,
                     contacts,
+                    // New v2 fields
+                    age_group_ids: ageGroupIds,
+                    gender_category_ids: genderCategoryIds,
+                    membership_id: membershipId,
+                    paid_status_id: paidStatusId,
+                    paid_amount: member.paidAmount,
+                    country_of_origin: member.countryOfOrigin,
                 } as Member;
             }));
 
