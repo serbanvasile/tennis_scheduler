@@ -106,18 +106,19 @@ export default function TeamsScreen() {
         setName('');
         setLogoUrl('');
         setSelectedColorIds([]);
-        if (sports.length > 0) setSelectedSportId(sports[0].sport_id);
+        if (sports.length > 0) setSelectedSportId(Number(sports[0].sport_id));
     };
 
     const handleEdit = (team: Team) => {
-        setEditingTeamId(team.team_id);
+        setEditingTeamId(Number(team.team_id));
         setName(team.name);
         setLogoUrl(team.logo_url || '');
-        setSelectedSportId(team.sport_id || (sports.length > 0 ? sports[0].sport_id : null));
+        const sportIdValue: number | null = team.sport_id != null ? Number(team.sport_id) : (sports.length > 0 ? Number(sports[0].sport_id) : null);
+        setSelectedSportId(sportIdValue);
 
         if (team.team_colors) {
             const names = team.team_colors.split(' & ');
-            const ids = colors.filter(c => names.includes(c.name)).map(c => c.color_id);
+            const ids = colors.filter(c => names.includes(c.name)).map(c => Number(c.color_id));
             setSelectedColorIds(ids);
         } else {
             setSelectedColorIds([]);
@@ -133,7 +134,7 @@ export default function TeamsScreen() {
 
         try {
             const selectedColorNames = colors
-                .filter(c => selectedColorIds.includes(c.color_id))
+                .filter(c => selectedColorIds.includes(Number(c.color_id)))
                 .map(c => c.name)
                 .join(' & ');
 
@@ -384,7 +385,7 @@ export default function TeamsScreen() {
                             <Text style={[styles.label, { color: theme.colors.text }]}>Team Colors</Text>
                             <View style={styles.chipContainer}>
                                 {colors.map(c => {
-                                    const isSelected = selectedColorIds.includes(c.color_id);
+                                    const isSelected = selectedColorIds.includes(Number(c.color_id));
                                     return (
                                         <TouchableOpacity
                                             key={c.color_id}
@@ -393,7 +394,7 @@ export default function TeamsScreen() {
                                                 { borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground },
                                                 isSelected && { borderColor: theme.colors.primary, borderWidth: 2 }
                                             ]}
-                                            onPress={() => toggleColor(c.color_id)}
+                                            onPress={() => toggleColor(Number(c.color_id))}
                                         >
                                             <View style={[styles.colorPreview, { backgroundColor: c.hex_code }]} />
                                             <Text style={[styles.chipText, { color: theme.colors.text }]}>{c.name}</Text>
