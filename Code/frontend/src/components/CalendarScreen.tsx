@@ -30,18 +30,18 @@ interface EventFormState {
   startTime: string; // HH:MM
   endTime: string;   // HH:MM
   // xref selections
-  eventTypeIds: number[];
-  systemIds: number[];
-  venueIds: number[];
-  courtIds: number[];
-  fieldIds: number[];
-  teamIds: number[];
-  memberIds: number[];
+  eventTypeIds: (number | string)[];
+  systemIds: (number | string)[];
+  venueIds: (number | string)[];
+  courtIds: (number | string)[];
+  fieldIds: (number | string)[];
+  teamIds: (number | string)[];
+  memberIds: (number | string)[];
   // New v2 fields
-  ageGroupIds: number[];
-  genderIds: number[];
-  levelIds: number[];
-  matchTypeIds: number[];
+  ageGroupIds: (number | string)[];
+  genderIds: (number | string)[];
+  levelIds: (number | string)[];
+  matchTypeIds: (number | string)[];
   // Series options
   isSeriesEvent: boolean;
   repeatPeriod: 'hours' | 'days' | 'weeks';
@@ -237,7 +237,7 @@ export default function CalendarScreen() {
   const [matchTypes, setMatchTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editingEventId, setEditingEventId] = useState<number | null>(null);
+  const [editingEventId, setEditingEventId] = useState<number | string | null>(null);
   const [formState, setFormState] = useState<EventFormState>(defaultFormState);
 
   // Preview configuration
@@ -648,7 +648,7 @@ export default function CalendarScreen() {
     setConfirmVisible(true);
   };
 
-  const toggleArrayItem = (arr: number[], item: number): number[] => {
+  const toggleArrayItem = <T,>(arr: T[], item: T): T[] => {
     return arr.includes(item) ? arr.filter(x => x !== item) : [...arr, item];
   };
 
@@ -1745,7 +1745,7 @@ export default function CalendarScreen() {
             <TouchableOpacity style={[styles.deleteButtonHeader, { backgroundColor: theme.colors.error }]} onPress={promptDeleteAll}>
               <Text style={[styles.buttonTextWhite, { color: theme.colors.errorText }]}>
                 {searchChips.length > 0
-                  ? `Delete Filtered (${filterItemsByChips(
+                  ? `Delete Filtered (${filterEventsWithTimeKeywords(
                     events,
                     searchChips,
                     (event) => {

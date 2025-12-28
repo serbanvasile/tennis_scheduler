@@ -52,6 +52,28 @@ export default function TeamsScreen() {
     const [searchChips, setSearchChips] = useState<string[]>([]);
     const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('OR');
 
+    // Helper to get default logo URL based on sport name
+    const getDefaultLogoForSport = (sportName: string): string => {
+        const normalizedName = sportName.toLowerCase().trim();
+        // Available sport logos: basketball, pickleball, soccer, tennis, volleyball
+        const availableLogos = ['basketball', 'pickleball', 'soccer', 'tennis', 'volleyball'];
+        if (availableLogos.includes(normalizedName)) {
+            return `../assets/png/${normalizedName}.png`;
+        }
+        return '';
+    };
+
+    // Handle sport selection with default logo
+    const handleSportSelect = (sportId: number) => {
+        setSelectedSportId(sportId);
+        // Always set the default logo for the selected sport
+        const sport = sports.find(s => s.sport_id === sportId);
+        if (sport) {
+            const defaultLogo = getDefaultLogoForSport(sport.name);
+            setLogoUrl(defaultLogo);
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
             loadData();
@@ -245,8 +267,8 @@ export default function TeamsScreen() {
                     <RemoteImage
                         uri={item.logo_url}
                         svgContent={(item as any).logo_svg}
-                        width={50}
-                        height={50}
+                        width={70}
+                        height={70}
                         circular
                         style={styles.teamLogo}
                     />
@@ -346,7 +368,7 @@ export default function TeamsScreen() {
                                             { borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground },
                                             selectedSportId === s.sport_id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
                                         ]}
-                                        onPress={() => setSelectedSportId(s.sport_id)}
+                                        onPress={() => handleSportSelect(s.sport_id as number)}
                                     >
                                         <Text style={[
                                             styles.chipText,
@@ -456,7 +478,7 @@ const styles = StyleSheet.create({
     },
     logoText: { fontSize: 20, fontWeight: 'bold' },
     textContainer: { flex: 1 },
-    teamLogo: { marginLeft: 12, borderWidth: 1, borderColor: '#ccc', borderRadius: 25 },
+    teamLogo: { marginLeft: 12, borderRadius: 35 },
     teamName: { fontSize: 18, fontWeight: 'bold' },
     teamDetail: { fontSize: 14, marginTop: 2 },
     colorRow: { marginTop: 4 },

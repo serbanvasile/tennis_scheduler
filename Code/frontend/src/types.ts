@@ -110,17 +110,17 @@ export interface TennisEvent {
   is_tournament?: boolean;
 
   // ID arrays for editing (populated by getEventDetails)
-  venueIds?: number[];
-  teamIds?: number[];
-  memberIds?: number[];
-  eventTypeIds?: number[];
-  systemIds?: number[];
-  ageGroupIds?: number[];
-  genderIds?: number[];
-  levelIds?: number[];
-  matchTypeIds?: number[];
-  courtIds?: number[];
-  fieldIds?: number[];
+  venueIds?: (number | string)[];
+  teamIds?: (number | string)[];
+  memberIds?: (number | string)[];
+  eventTypeIds?: (number | string)[];
+  systemIds?: (number | string)[];
+  ageGroupIds?: (number | string)[];
+  genderIds?: (number | string)[];
+  levelIds?: (number | string)[];
+  matchTypeIds?: (number | string)[];
+  courtIds?: (number | string)[];
+  fieldIds?: (number | string)[];
   seasonId?: number;
   isTournament?: boolean;
 }

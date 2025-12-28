@@ -1,5 +1,5 @@
 import React from 'react';
-import { ColorValue, Dimensions, Platform } from 'react-native';
+import { ColorValue, Dimensions, Platform, DimensionValue } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Storage key for persisting theme index
@@ -7,7 +7,7 @@ const THEME_INDEX_STORAGE_KEY = '@theme_index';
 
 // Max content width for modals and forms
 // Uses device type instead of resolution - phones/tablets get full width, desktop gets constrained width
-const getResponsiveWidth = (): string => {
+const getResponsiveWidth = (): DimensionValue => {
   // Mobile devices (iOS/Android) always get full width
   if (Platform.OS === 'ios' || Platform.OS === 'android') {
     return '100%';

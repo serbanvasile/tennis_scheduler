@@ -766,6 +766,7 @@ class LocalDatabaseService {
             paid_status_id: paidStatusId,
             paid_amount: member.paidAmount,
             country_of_origin: member.countryOfOrigin,
+            birth_date: member.birthDate,
         } as Member;
     }
 
@@ -1486,20 +1487,20 @@ class LocalDatabaseService {
         startDate: number;
         endDate?: number;
         description?: string;
-        venueIds?: number[];
-        teamIds?: number[];
-        memberIds?: number[];
-        eventTypeIds?: number[];
-        systemIds?: number[];
-        courtIds?: number[];
-        fieldIds?: number[];
+        venueIds?: (number | string)[];
+        teamIds?: (number | string)[];
+        memberIds?: (number | string)[];
+        eventTypeIds?: (number | string)[];
+        systemIds?: (number | string)[];
+        courtIds?: (number | string)[];
+        fieldIds?: (number | string)[];
         seasonId?: number;
         isTournament?: boolean;
         // New v2 fields
-        ageGroupIds?: number[];
-        genderIds?: number[];
-        levelIds?: number[];
-        matchTypeIds?: number[];
+        ageGroupIds?: (number | string)[];
+        genderIds?: (number | string)[];
+        levelIds?: (number | string)[];
+        matchTypeIds?: (number | string)[];
         isSeriesEvent?: boolean;
         repeatPeriod?: 'hours' | 'days' | 'weeks';
         repeatInterval?: number;
