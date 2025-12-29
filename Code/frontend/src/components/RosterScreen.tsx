@@ -17,7 +17,7 @@ import {
 import { databaseService } from '../database/sqlite-service';
 import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
 import { commonStyles } from '../ui/commonStyles';
-import { Member, MemberTeam, Sport, Role, Position, Team } from '../types';
+import { Member, Sport, Role, Position, Team } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
 import { ImportScreen } from './ImportScreen';
@@ -467,7 +467,7 @@ export default function RosterScreen() {
   const [allPaidStatuses, setAllPaidStatuses] = useState<any[]>([]);
 
   // Edit State
-  const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
+  const [editingMemberId, setEditingMemberId] = useState<number | string | null>(null);
   const [activeTab, setActiveTab] = useState('General');
 
   // Form State - General
@@ -744,7 +744,7 @@ export default function RosterScreen() {
     setConfirmVisible(true);
   };
 
-  const toggleTeam = (teamId: number) => {
+  const toggleTeam = (teamId: number | string) => {
     const exists = memberTeams.find(mt => mt.teamId === teamId);
     if (exists) {
       setMemberTeams(prev => prev.filter(mt => mt.teamId !== teamId));
@@ -753,18 +753,18 @@ export default function RosterScreen() {
     }
   };
 
-  const toggleRole = (teamId: number, roleId: number) => {
+  const toggleRole = (teamId: number | string, roleId: number | string) => {
     setMemberTeams(prev => prev.map(mt => {
       if (mt.teamId !== teamId) return mt;
       const hasRole = mt.roleIds.includes(roleId);
       return {
         ...mt,
-        roleIds: hasRole ? mt.roleIds.filter((id: number) => id !== roleId) : [...mt.roleIds, roleId]
+        roleIds: hasRole ? mt.roleIds.filter((id: number | string) => id !== roleId) : [...mt.roleIds, roleId]
       };
     }));
   };
 
-  const togglePosition = (teamId: number, positionId: number) => {
+  const togglePosition = (teamId: number | string, positionId: number | string) => {
     setMemberTeams(prev => prev.map(mt => {
       if (mt.teamId !== teamId) return mt;
       const hasPos = mt.positionIds.includes(positionId);
@@ -1252,7 +1252,7 @@ export default function RosterScreen() {
                                           textAlignVertical: 'center'
                                         }
                                       ]}
-                                      value={mt.skillId === 'Custom' ? '' : mt.skillId}
+                                      value={mt.skillId === 'Custom' ? '' : (allSkills.find(s => s.skill_id === mt.skillId)?.name || mt.skillId)}
                                       placeholder="Enter skill"
                                       placeholderTextColor={theme.colors.muted}
                                       onChangeText={(text) => {

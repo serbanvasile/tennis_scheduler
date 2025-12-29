@@ -73,14 +73,14 @@ export interface Venue {
 }
 
 export interface System {
-  system_id: number;
+  system_id: number | string;
   guid: string;
   name: string; // 'Round Robin', 'Playoff', 'Swiss', 'Elimination', etc.
   description?: string;
 }
 
 export interface TennisEvent {
-  event_id: string | number;  // Can be UUID string or legacy numeric ID
+  event_id: number | string;  // Can be UUID string or legacy numeric ID
   guid: string;
   name: string;
   start_date: number;
@@ -121,7 +121,7 @@ export interface TennisEvent {
   matchTypeIds?: (number | string)[];
   courtIds?: (number | string)[];
   fieldIds?: (number | string)[];
-  seasonId?: number;
+  seasonId?: number | string;
   isTournament?: boolean;
 }
 
@@ -130,30 +130,30 @@ export interface TennisEvent {
 export type Player = Member; // Alias for backward compat in components
 
 export interface Position {
-  position_id: number;
+  position_id: number | string;
   guid: string;
   name: string;
-  sport_id?: number;
+  sport_id?: number | string;
   description?: string;
 }
 
 export interface Skill {
-  skill_id: number;
+  skill_id: number | string;
   guid: string;
   name: string;
   sort_order?: number;
 }
 
 export type Court = {
-  id: string;
+  id: number | string;
   label: string;
   location?: string;
   timeSlots: string[];
 };
 
 export type Week = {
-  id: string;
-  leagueId: string;
+  id: number | string;
+  leagueId: number | string;
   index: number;
   dateISO: string;
   status: 'draft' | 'published' | 'completed' | 'cancelled';
@@ -161,16 +161,16 @@ export type Week = {
 };
 
 export type Availability = {
-  id: string;
-  weekId: string;
-  playerId: string;
+  id: number | string;
+  weekId: number | string;
+  playerId: number | string;
   state: 'in' | 'out' | 'maybe';
 };
 
 export type Match = {
-  id: string;
-  weekId: string;
-  courtId: string;
+  id: number | string;
+  weekId: number | string;
+  courtId: number | string;
   timeSlot: string;
   teamA: string[];
   teamB: string[];
@@ -179,14 +179,14 @@ export type Match = {
 };
 
 export type Score = {
-  id: string;
-  matchId: string;
+  id: number | string;
+  matchId: number | string;
   teamAPoints: number;
   teamBPoints: number;
 };
 
 export interface League {
-  id: string;
+  id: number | string;
   name: string;
   season?: {
     startISO: string;
@@ -202,7 +202,7 @@ export interface League {
 }
 
 export interface PlayerStats {
-  playerId: string;
+  playerId: number | string;
   gamesPlayed: number;
   wins: number;
   losses: number;

@@ -48,7 +48,7 @@ export default function VenuesScreen() {
     const [showVenueModal, setShowVenueModal] = useState(false);
     const [showResourceModal, setShowResourceModal] = useState(false);
     const [editingVenue, setEditingVenue] = useState<Partial<Venue> | null>(null);
-    const [editingResource, setEditingResource] = useState<{ type: 'court' | 'field'; venueId: number; item?: Court | Field } | null>(null);
+    const [editingResource, setEditingResource] = useState<{ type: 'court' | 'field'; venueId: number | string; item?: Court | Field } | null>(null);
 
     // Form states
     const [venueName, setVenueName] = useState('');
@@ -121,7 +121,7 @@ export default function VenuesScreen() {
     const [searchMode, setSearchMode] = useState<'AND' | 'OR'>('OR');
 
     // Expanded venue tracking
-    const [expandedVenueId, setExpandedVenueId] = useState<number | null>(null);
+    const [expandedVenueId, setExpandedVenueId] = useState<number | string | null>(null);
 
     const { theme } = useTheme();
 
@@ -260,7 +260,7 @@ export default function VenuesScreen() {
     };
 
     // Resource CRUD
-    const handleAddResource = (venueId: number, type: 'court' | 'field') => {
+    const handleAddResource = (venueId: number | string, type: 'court' | 'field') => {
         setEditingResource({ type, venueId });
         setResourceName('');
         setResourceSurface('');
@@ -269,7 +269,7 @@ export default function VenuesScreen() {
         setShowResourceModal(true);
     };
 
-    const handleEditResource = (venueId: number, type: 'court' | 'field', item: Court | Field) => {
+    const handleEditResource = (venueId: number | string, type: 'court' | 'field', item: Court | Field) => {
         setEditingResource({ type, venueId, item });
         setResourceName(item.name);
         setResourceSurface(item.surface || '');
@@ -388,7 +388,7 @@ export default function VenuesScreen() {
         }
     };
 
-    const handleDeleteAllCourts = (venueId: number, courtCount: number) => {
+    const handleDeleteAllCourts = (venueId: number | string, courtCount: number) => {
         if (courtCount === 0) return;
 
         setConfirmConfig({
@@ -414,7 +414,7 @@ export default function VenuesScreen() {
         setConfirmVisible(true);
     };
 
-    const handleDeleteAllFields = (venueId: number, fieldCount: number) => {
+    const handleDeleteAllFields = (venueId: number | string, fieldCount: number) => {
         if (fieldCount === 0) return;
 
         setConfirmConfig({

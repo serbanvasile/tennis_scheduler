@@ -323,7 +323,7 @@ class LocalDatabaseService {
         }
     }
 
-    async createTeam(name: string, sportId?: number, teamColors?: string, colorIds?: number[], logoUrl?: string): Promise<any> {
+    async createTeam(name: string, sportId?: number | string, teamColors?: string, colorIds?: (number | string)[], logoUrl?: string): Promise<any> {
         try {
             let teamId = '';
             await database.write(async () => {
@@ -362,7 +362,7 @@ class LocalDatabaseService {
         }
     }
 
-    async updateTeam(teamId: number | string, name: string, sportId?: number, teamColors?: string, colorIds?: number[], logoUrl?: string): Promise<any> {
+    async updateTeam(teamId: number | string, name: string, sportId?: number | string, teamColors?: string, colorIds?: (number | string)[], logoUrl?: string): Promise<any> {
         try {
             await database.write(async () => {
                 const team = await database.get<TeamModel>('teams').find(teamId.toString());

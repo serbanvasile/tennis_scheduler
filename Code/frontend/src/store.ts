@@ -36,12 +36,14 @@ interface LegacyWeek {
 }
 
 interface LegacyMatch {
-    id: string;
-    weekId: string;
-    courtId: string;
+    id: number | string;
+    weekId: number | string;
+    courtId: number | string;
     timeSlot: string;
-    team1: [DID, DID];
-    team2: [DID, DID];
+    teamA: string[];
+    teamB: string[];
+    generatedBy: string;
+    lock?: boolean;
 }
 
 interface PlayerStats {

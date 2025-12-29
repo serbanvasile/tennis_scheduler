@@ -15,7 +15,6 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { ThemeProvider, useTheme, MAX_CONTENT_WIDTH } from "./src/ui/theme";
 import { useStore } from "./src/store";
-import type { Week } from "./src/types";
 import { CourtColumn } from "./src/components/CourtColumn";
 import AnalyticsScreen from "./src/components/AnalyticsScreen";
 import RosterScreen from "./src/components/RosterScreen";
@@ -68,7 +67,7 @@ function WeeksListScreen({ navigation }: any) {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <FlatList
         data={weeks}
-        keyExtractor={(w: Week) => w.id}
+        keyExtractor={(w) => String(w.id)}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[styles.item, { borderBottomColor: theme.colors.border }]}
@@ -132,8 +131,8 @@ function WeeksStack() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.surface },
-        headerTintColor: theme.colors.text,
+        headerStyle: { backgroundColor: theme.colors.surface as string },
+        headerTintColor: theme.colors.text as string,
         contentStyle: { backgroundColor: theme.colors.background }
       }}
     >
@@ -197,7 +196,7 @@ function AppContent() {
           <Tab.Navigator
             screenOptions={{
               headerStyle: { backgroundColor: theme.colors.surface, height: 65 },
-              headerTintColor: theme.colors.text,
+              headerTintColor: theme.colors.text as string,
               headerTitle: () => null,
               headerLeft: () => <DateTimeHeader />,
               headerRight: () => <ColorSlider />,
@@ -212,8 +211,8 @@ function AppContent() {
                 shadowOpacity: 0.25,
                 shadowRadius: 3.84,
               },
-              tabBarActiveTintColor: theme.colors.primary,
-              tabBarInactiveTintColor: theme.colors.muted,
+              tabBarActiveTintColor: theme.colors.primary as string,
+              tabBarInactiveTintColor: theme.colors.muted as string,
               tabBarLabelStyle: { fontSize: 12, marginTop: 1, marginBottom: 6 },
               tabBarIcon: ({ focused, color }) => (
                 <Text style={{ fontSize: 16, color, marginTop: 6 }}>

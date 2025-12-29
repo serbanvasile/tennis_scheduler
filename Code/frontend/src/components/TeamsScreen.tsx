@@ -21,6 +21,7 @@ import { ConfirmationModal } from './ConfirmationModal';
 import { RemoteImage } from './RemoteImage';
 import { SearchWithChips } from './SearchWithChips';
 import { filterItemsByChips } from '../utils/searchUtils';
+import { getSportSvgContent } from '../utils/sportIcons';
 
 export default function TeamsScreen() {
     const { theme } = useTheme();
@@ -31,13 +32,13 @@ export default function TeamsScreen() {
     const [modalVisible, setModalVisible] = useState(false);
 
     // Edit State
-    const [editingTeamId, setEditingTeamId] = useState<number | null>(null);
+    const [editingTeamId, setEditingTeamId] = useState<number | string | null>(null);
 
     // Form State
     const [name, setName] = useState('');
     const [logoUrl, setLogoUrl] = useState('');
-    const [selectedSportId, setSelectedSportId] = useState<number | null>(null);
-    const [selectedColorIds, setSelectedColorIds] = useState<number[]>([]);
+    const [selectedSportId, setSelectedSportId] = useState<number | string | null>(null);
+    const [selectedColorIds, setSelectedColorIds] = useState<(number | string)[]>([]);
 
     // Confirmation State
     const [confirmVisible, setConfirmVisible] = useState(false);
@@ -58,7 +59,7 @@ export default function TeamsScreen() {
         // Available sport logos: basketball, pickleball, soccer, tennis, volleyball
         const availableLogos = ['basketball', 'pickleball', 'soccer', 'tennis', 'volleyball'];
         if (availableLogos.includes(normalizedName)) {
-            return `../assets/png/${normalizedName}.png`;
+            return `../../assets/svg/${normalizedName}.svg`;
         }
         return '';
     };
@@ -106,19 +107,18 @@ export default function TeamsScreen() {
         setName('');
         setLogoUrl('');
         setSelectedColorIds([]);
-        if (sports.length > 0) setSelectedSportId(Number(sports[0].sport_id));
+        if (sports.length > 0) setSelectedSportId(sports[0].sport_id);
     };
 
     const handleEdit = (team: Team) => {
-        setEditingTeamId(Number(team.team_id));
+        setEditingTeamId(team.team_id);
         setName(team.name);
         setLogoUrl(team.logo_url || '');
-        const sportIdValue: number | null = team.sport_id != null ? Number(team.sport_id) : (sports.length > 0 ? Number(sports[0].sport_id) : null);
-        setSelectedSportId(sportIdValue);
+        setSelectedSportId(team.sport_id || (sports.length > 0 ? sports[0].sport_id : null));
 
         if (team.team_colors) {
             const names = team.team_colors.split(' & ');
-            const ids = colors.filter(c => names.includes(c.name)).map(c => Number(c.color_id));
+            const ids = colors.filter(c => names.includes(c.name)).map(c => c.color_id);
             setSelectedColorIds(ids);
         } else {
             setSelectedColorIds([]);
@@ -134,7 +134,7 @@ export default function TeamsScreen() {
 
         try {
             const selectedColorNames = colors
-                .filter(c => selectedColorIds.includes(Number(c.color_id)))
+                .filter(c => selectedColorIds.includes(c.color_id))
                 .map(c => c.name)
                 .join(' & ');
 
@@ -238,7 +238,7 @@ export default function TeamsScreen() {
         setConfirmVisible(true);
     };
 
-    const toggleColor = (id: number) => {
+    const toggleColor = (id: number | string) => {
         if (selectedColorIds.includes(id)) {
             setSelectedColorIds(prev => prev.filter(cid => cid !== id));
         } else {
@@ -246,37 +246,66 @@ export default function TeamsScreen() {
         }
     };
 
-    const renderTeamCard = ({ item }: { item: Team }) => (
-        <TouchableOpacity
-            style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-            onPress={() => handleEdit(item)}
-        >
-            <View style={styles.cardContent}>
-                <View style={[styles.logoPlaceholder, { backgroundColor: theme.colors.chipBackground, borderWidth: 1, borderColor: theme.colors.primary }]}>
-                    <Text style={[styles.logoText, { color: theme.colors.chipText }]}>{item.name.charAt(0)}</Text>
-                </View>
-                <View style={styles.textContainer}>
-                    <Text style={[styles.teamName, { color: theme.colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.teamDetail, { color: theme.colors.primary, fontWeight: 'bold' }]}>{(item.sport_name || 'Unknown Sport').toUpperCase()}</Text>
-                    {item.team_colors && (
-                        <View style={styles.colorRow}>
-                            <Text style={[styles.colorLabel, { color: theme.colors.muted }]}>Colors: {item.team_colors}</Text>
+    const renderTeamCard = ({ item }: { item: Team }) => {
+        let svgContent = (item as any).logo_svg;
+
+        // If no static SVG but we have a URL pointing to our local assets (default logic),
+        // let's grab the raw SVG content and colorize it.
+        // The default URL format in updateTeam was: `../../assets/svg/${normalizedName}.svg`
+        if (!svgContent && item.logo_url && item.logo_url.includes('assets/svg/')) {
+            // Extract sport name from URL or use the team's sport name
+            // URL format: ../../assets/svg/soccer.svg
+            const sportNameFromUrl = item.logo_url.split('/').pop()?.replace('.svg', '');
+            const sportToUse = sportNameFromUrl || item.sport_name;
+
+            if (sportToUse) {
+                const rawSvg = getSportSvgContent(sportToUse);
+                if (rawSvg) {
+                    svgContent = rawSvg
+                        .replace(/fill:\s*#000000/g, `fill:${theme.colors.primary as string}`)
+                        .replace(/fill="#000000"/g, `fill="${theme.colors.primary as string}"`)
+                        .replace(/fill="black"/g, `fill="${theme.colors.primary as string}"`);
+                }
+            }
+        }
+
+        const hasLogo = (item.logo_url && item.logo_url.trim() !== '') || svgContent;
+
+        return (
+            <TouchableOpacity
+                style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+                onPress={() => handleEdit(item)}
+            >
+                <View style={styles.cardContent}>
+                    {hasLogo ? (
+                        <View style={{ marginRight: 16 }}>
+                            <RemoteImage
+                                uri={item.logo_url}
+                                svgContent={svgContent}
+                                width={50}
+                                height={50}
+                                circular
+                                style={{ borderRadius: 25 }}
+                            />
+                        </View>
+                    ) : (
+                        <View style={[styles.logoPlaceholder, { backgroundColor: theme.colors.chipBackground, borderWidth: 1, borderColor: theme.colors.primary }]}>
+                            <Text style={[styles.logoText, { color: theme.colors.chipText }]}>{item.name.charAt(0)}</Text>
                         </View>
                     )}
+                    <View style={styles.textContainer}>
+                        <Text style={[styles.teamName, { color: theme.colors.text }]}>{item.name}</Text>
+                        <Text style={[styles.teamDetail, { color: theme.colors.primary, fontWeight: 'bold' }]}>{(item.sport_name || 'Unknown Sport').toUpperCase()}</Text>
+                        {item.team_colors && (
+                            <View style={styles.colorRow}>
+                                <Text style={[styles.colorLabel, { color: theme.colors.muted }]}>Colors: {item.team_colors}</Text>
+                            </View>
+                        )}
+                    </View>
                 </View>
-                {(item.logo_url && item.logo_url.trim() !== '') || (item as any).logo_svg ? (
-                    <RemoteImage
-                        uri={item.logo_url}
-                        svgContent={(item as any).logo_svg}
-                        width={70}
-                        height={70}
-                        circular
-                        style={styles.teamLogo}
-                    />
-                ) : null}
-            </View>
-        </TouchableOpacity>
-    );
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -385,7 +414,7 @@ export default function TeamsScreen() {
                             <Text style={[styles.label, { color: theme.colors.text }]}>Team Colors</Text>
                             <View style={styles.chipContainer}>
                                 {colors.map(c => {
-                                    const isSelected = selectedColorIds.includes(Number(c.color_id));
+                                    const isSelected = selectedColorIds.includes(c.color_id);
                                     return (
                                         <TouchableOpacity
                                             key={c.color_id}
@@ -394,7 +423,7 @@ export default function TeamsScreen() {
                                                 { borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground },
                                                 isSelected && { borderColor: theme.colors.primary, borderWidth: 2 }
                                             ]}
-                                            onPress={() => toggleColor(Number(c.color_id))}
+                                            onPress={() => toggleColor(c.color_id)}
                                         >
                                             <View style={[styles.colorPreview, { backgroundColor: c.hex_code }]} />
                                             <Text style={[styles.chipText, { color: theme.colors.text }]}>{c.name}</Text>

@@ -13,13 +13,13 @@ import {
 import { databaseService } from '../database/sqlite-service';
 import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
 import { ScreenHeader } from './ScreenHeader';
-import { Team, Role, Sport } from '../types';
+import { Team, Role, Sport, Position } from '../types';
 
-interface Position {
-  position_id: number;
-  name: string;
-  sport_id: number;
-}
+// interface Position {
+//   position_id: number | string;
+//   name: string;
+//   sport_id: number | string;
+// }
 
 interface ParsedMember {
   displayName: string;
@@ -67,10 +67,10 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
   const { theme } = useTheme();
 
   // Default Assignments State
-  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
-  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
-  const [selectedPositionIds, setSelectedPositionIds] = useState<number[]>([]);
-  const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<number | string | null>(null);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<(number | string)[]>([]);
+  const [selectedPositionIds, setSelectedPositionIds] = useState<(number | string)[]>([]);
+  const [selectedLevelId, setSelectedLevelId] = useState<number | string | null>(null);
 
   const sampleData = `#\tNAME\tGender\tShare\tCell\tLevel
 1\tAlex Johnson\tM\tTQ\t(555) 123-4567\t3.5
@@ -343,7 +343,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
     }
   };
 
-  const toggleRole = (roleId: number) => {
+  const toggleRole = (roleId: number | string) => {
     setSelectedRoleIds(prev =>
       prev.includes(roleId)
         ? prev.filter(id => id !== roleId)
@@ -351,7 +351,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
     );
   };
 
-  const togglePosition = (positionId: number) => {
+  const togglePosition = (positionId: number | string) => {
     setSelectedPositionIds(prev =>
       prev.includes(positionId)
         ? prev.filter(id => id !== positionId)

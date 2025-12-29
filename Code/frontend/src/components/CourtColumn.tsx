@@ -16,8 +16,8 @@ export const CourtColumn: React.FC<{ courtId: string; label: string }> = ({
     <View style={styles.col}>
       <Text style={[styles.header, { color: theme.colors.text }]}>{label}</Text>
       {matches.length === 0 && <Text style={{ opacity: 0.6, color: theme.colors.muted }}>No matches yet</Text>}
-      {matches.map((m: Match) => (
-        <MatchCard key={m.id} match={m} />
+      {matches.map((m) => (
+        <MatchCard key={String(m.id)} match={m as Match} />
       ))}
     </View>
   );
