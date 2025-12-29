@@ -11,7 +11,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // create_user, create_date, update_user, update_date, deleted_flag
 
 export const schema = appSchema({
-  version: 3,
+  version: 4,
   tables: [
     // ============================================================================
     // CORE TABLES
@@ -415,6 +415,12 @@ export const schema = appSchema({
         { name: 'member_id', type: 'string', isIndexed: true },
         { name: 'skill_id', type: 'string', isOptional: true, isIndexed: true },
         { name: 'level_id', type: 'string', isOptional: true, isIndexed: true },
+        // Contract fields (per-team)
+        { name: 'share_type', type: 'string', isOptional: true },
+        { name: 'share', type: 'number', isOptional: true },
+        { name: 'membership_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'paid_status_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'paid_amount', type: 'number', isOptional: true },
         { name: 'create_user', type: 'string', isOptional: true },
         { name: 'create_date', type: 'number', isOptional: true },
         { name: 'update_user', type: 'string', isOptional: true },

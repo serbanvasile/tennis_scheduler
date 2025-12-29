@@ -107,7 +107,7 @@ export default function TeamsScreen() {
         setName('');
         setLogoUrl('');
         setSelectedColorIds([]);
-        if (sports.length > 0) setSelectedSportId(sports[0].sport_id);
+        setSelectedSportId(null);  // Don't default to any sport - make user pick
     };
 
     const handleEdit = (team: Team) => {

@@ -539,6 +539,12 @@ class LocalDatabaseService {
                             sport_name: sportName,
                             skill_id: xref.skillId,
                             level_id: xref.levelId, // Include level_id for filtering
+                            // Contract fields (per-team)
+                            share_type: xref.shareType,
+                            share: xref.share,
+                            membership_id: xref.membershipId,
+                            paid_status_id: xref.paidStatusId,
+                            paid_amount: xref.paidAmount,
                             role_names: roleNames.join(','),
                             position_names: positionNames.join(','),
                             positions, // Include structured positions for Match Type filtering
@@ -697,6 +703,12 @@ class LocalDatabaseService {
                     name: team.name,
                     skill_id: xref.skillId,
                     level_id: xref.levelId,
+                    // Contract fields (per-team)
+                    share_type: xref.shareType,
+                    share: xref.share,
+                    membership_id: xref.membershipId,
+                    paid_status_id: xref.paidStatusId,
+                    paid_amount: xref.paidAmount,
                     roles,
                     positions,
                 });
@@ -844,6 +856,12 @@ class LocalDatabaseService {
                             x.memberId = memberId;
                             x.skillId = teamInfo.skill_id?.toString() || teamInfo.skillId?.toString() || null;
                             x.levelId = teamInfo.level_id?.toString() || teamInfo.levelId?.toString() || null;
+                            // Contract fields (per-team)
+                            x.shareType = teamInfo.share_type || teamInfo.shareType || null;
+                            x.share = teamInfo.share ?? null;
+                            x.membershipId = teamInfo.membership_id?.toString() || teamInfo.membershipId?.toString() || null;
+                            x.paidStatusId = teamInfo.paid_status_id?.toString() || teamInfo.paidStatusId?.toString() || null;
+                            x.paidAmount = teamInfo.paid_amount ?? teamInfo.paidAmount ?? null;
                         });
 
                         // Link roles for this team
@@ -1021,6 +1039,12 @@ class LocalDatabaseService {
                             x.memberId = memberId.toString();
                             x.skillId = teamInfo.skill_id?.toString() || teamInfo.skillId?.toString() || null;
                             x.levelId = teamInfo.level_id?.toString() || teamInfo.levelId?.toString() || null;
+                            // Contract fields (per-team)
+                            x.shareType = teamInfo.share_type || teamInfo.shareType || null;
+                            x.share = teamInfo.share ?? null;
+                            x.membershipId = teamInfo.membership_id?.toString() || teamInfo.membershipId?.toString() || null;
+                            x.paidStatusId = teamInfo.paid_status_id?.toString() || teamInfo.paidStatusId?.toString() || null;
+                            x.paidAmount = teamInfo.paid_amount ?? teamInfo.paidAmount ?? null;
                         });
 
                         // Link roles for this team

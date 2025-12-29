@@ -364,6 +364,17 @@ export class TeamMemberXref extends Model {
   set skillId(value: string | null) { this._setRaw('skill_id', value); }
   get levelId() { return this._getRaw('level_id') as string | null; }
   set levelId(value: string | null) { this._setRaw('level_id', value); }
+  // Contract fields (per-team)
+  get shareType() { return this._getRaw('share_type') as string | null; }
+  set shareType(value: string | null) { this._setRaw('share_type', value); }
+  get share() { return this._getRaw('share') as number | null; }
+  set share(value: number | null) { this._setRaw('share', value); }
+  get membershipId() { return this._getRaw('membership_id') as string | null; }
+  set membershipId(value: string | null) { this._setRaw('membership_id', value); }
+  get paidStatusId() { return this._getRaw('paid_status_id') as string | null; }
+  set paidStatusId(value: string | null) { this._setRaw('paid_status_id', value); }
+  get paidAmount() { return this._getRaw('paid_amount') as number | null; }
+  set paidAmount(value: number | null) { this._setRaw('paid_amount', value); }
 }
 
 export class MemberRoleXref extends Model {

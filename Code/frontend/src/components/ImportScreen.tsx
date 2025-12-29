@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 import { databaseService } from '../database/sqlite-service';
 import { useTheme, MAX_CONTENT_WIDTH } from '../ui/theme';
 import { ScreenHeader } from './ScreenHeader';
-import { Team, Role, Sport, Position } from '../types';
+import { Team, Role, Sport, Position, Member } from '../types';
 
 // interface Position {
 //   position_id: number | string;
@@ -64,7 +64,21 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
   const [importMode, setImportMode] = useState<'update' | 'add-new'>('update');
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState<any>(null);
+  const [existingMembers, setExistingMembers] = useState<Member[]>([]);
   const { theme } = useTheme();
+
+  // Fetch existing members on mount for matching in 'update' mode
+  useEffect(() => {
+    const fetchExistingMembers = async () => {
+      try {
+        const members = await databaseService.getMembers();
+        setExistingMembers(members);
+      } catch (error) {
+        console.error('Failed to fetch existing members:', error);
+      }
+    };
+    fetchExistingMembers();
+  }, []);
 
   // Default Assignments State
   const [selectedTeamId, setSelectedTeamId] = useState<number | string | null>(null);
@@ -202,6 +216,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
     try {
       // Import members one by one with team/role/position assignments
       let imported = 0;
+      let updated = 0;
       const errors: string[] = [];
 
       for (const member of parsedMembers) {
@@ -269,46 +284,134 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
             }
           }
 
-          // Create member with new fields AND team/role/position/contacts assignments
           // Get defaults for v2 fields
           const ageGroupIds = getDefaultAgeGroupParticipation();
           const genderCategoryIds = getDefaultGenderParticipation(member.gender);
 
-          const result = await databaseService.createMember(
-            {
-              first_name: firstName,
-              last_name: lastName,
-              display_name: firstName, // Default display name to first name only
-              gender: member.gender,
-              dominant_side: member.handed,
-              share: member.sharePercentage,
-              share_type: member.shareType,
-              // New v2 fields with defaults
-              age_group_ids: ageGroupIds,
-              gender_category_ids: genderCategoryIds
-            },
-            [{ teamId: selectedTeamId, roleIds: memberRoleIds, positionIds: selectedPositionIds, skillId, levelId: selectedLevelId }],
-            contacts
-          );
+          // Check if we should try to find an existing member (in 'update' mode)
+          let existingMember = null;
+          if (importMode === 'update') {
+            // Normalize names for comparison (case-insensitive, trimmed)
+            const normalizedFirst = firstName.toLowerCase().trim();
+            const normalizedLast = lastName.toLowerCase().trim();
 
-          if (result.member_id) {
-            imported++;
-          } else if (result.error) {
-            errors.push(`${member.displayName}: ${result.error}`);
+            // Find existing member by matching first + last name
+            existingMember = existingMembers.find(m =>
+              m.first_name?.toLowerCase().trim() === normalizedFirst &&
+              m.last_name?.toLowerCase().trim() === normalizedLast
+            );
+          }
+
+          if (existingMember && importMode === 'update') {
+            // Update existing member - add the new team assignment
+            // First, get the existing member's current teams
+            const memberDetails = await databaseService.getMemberDetails(existingMember.member_id);
+            const existingTeams = memberDetails?.teams || [];
+
+            // Check if member is already on the selected team
+            const alreadyOnTeam = existingTeams.some((t: any) =>
+              t.team_id?.toString() === selectedTeamId?.toString()
+            );
+
+            if (!alreadyOnTeam) {
+              // Add the new team assignment to existing teams
+              const updatedTeams = [
+                ...existingTeams.map((t: any) => ({
+                  teamId: t.team_id,
+                  roleIds: t.roles?.map((r: any) => r.role_id) || [],
+                  positionIds: t.positions?.map((p: any) => p.position_id) || [],
+                  skillId: t.skill_id || null,
+                  levelId: t.level_id || null
+                })),
+                { teamId: selectedTeamId, roleIds: memberRoleIds, positionIds: selectedPositionIds, skillId, levelId: selectedLevelId }
+              ];
+
+              await databaseService.updateMember(
+                existingMember.member_id,
+                {
+                  first_name: firstName,
+                  last_name: lastName,
+                  display_name: existingMember.display_name || firstName,
+                  gender: member.gender,
+                  dominant_side: member.handed,
+                  share: member.sharePercentage,
+                  share_type: member.shareType,
+                  age_group_ids: ageGroupIds,
+                  gender_category_ids: genderCategoryIds
+                },
+                updatedTeams,
+                contacts.length > 0 ? contacts : undefined
+              );
+              updated++;
+            } else {
+              // Already on the team, just update member data without changing teams
+              await databaseService.updateMember(
+                existingMember.member_id,
+                {
+                  first_name: firstName,
+                  last_name: lastName,
+                  display_name: existingMember.display_name || firstName,
+                  gender: member.gender,
+                  dominant_side: member.handed,
+                  share: member.sharePercentage,
+                  share_type: member.shareType,
+                  age_group_ids: ageGroupIds,
+                  gender_category_ids: genderCategoryIds
+                },
+                existingTeams.map((t: any) => ({
+                  teamId: t.team_id,
+                  roleIds: t.roles?.map((r: any) => r.role_id) || [],
+                  positionIds: t.positions?.map((p: any) => p.position_id) || [],
+                  skillId: t.skill_id || null,
+                  levelId: t.level_id || null
+                })),
+                contacts.length > 0 ? contacts : undefined
+              );
+              updated++;
+            }
+          } else {
+            // Create new member
+            const result = await databaseService.createMember(
+              {
+                first_name: firstName,
+                last_name: lastName,
+                display_name: firstName, // Default display name to first name only
+                gender: member.gender,
+                dominant_side: member.handed,
+                share: member.sharePercentage,
+                share_type: member.shareType,
+                // New v2 fields with defaults
+                age_group_ids: ageGroupIds,
+                gender_category_ids: genderCategoryIds
+              },
+              [{ teamId: selectedTeamId, roleIds: memberRoleIds, positionIds: selectedPositionIds, skillId, levelId: selectedLevelId }],
+              contacts
+            );
+
+            if (result.member_id) {
+              imported++;
+            } else if (result.error) {
+              errors.push(`${member.displayName}: ${result.error}`);
+            }
           }
         } catch (err) {
           errors.push(`${member.displayName}: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
       }
 
-      const results = { imported, updated: 0, errors };
+      const results = { imported, updated, errors };
       setImportResults(results);
 
       if (errors.length > 0) {
         // Errors occurred - stay on import screen and display errors
+        const summaryParts = [];
+        if (results.imported > 0) summaryParts.push(`Imported: ${results.imported}`);
+        if (results.updated > 0) summaryParts.push(`Updated: ${results.updated}`);
+        summaryParts.push(`Errors: ${errors.length}`);
+
         Alert.alert(
           'Import Completed with Errors',
-          `Imported: ${results.imported} members\nErrors: ${errors.length}\n\nErrors:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...and ${errors.length - 5} more` : ''}`
+          `${summaryParts.join(' | ')}\n\nErrors:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...and ${errors.length - 5} more` : ''}`
         );
       } else {
         // All successful - close import screen and refresh member list
@@ -636,7 +739,7 @@ export const ImportScreen: React.FC<ImportScreenProps> = ({
                     {isImporting
                       ? 'Importing...'
                       : importResults
-                        ? `✓ Imported: ${importResults.imported}${importResults.errors?.length > 0 ? `, Errors: ${importResults.errors.length}` : ''}`
+                        ? `✓${importResults.imported > 0 ? ` Imported: ${importResults.imported}` : ''}${importResults.updated > 0 ? ` Updated: ${importResults.updated}` : ''}${importResults.errors?.length > 0 ? ` | Errors: ${importResults.errors.length}` : ''}`
                         : canImport
                           ? `Import ${parsedMembers.length} Members`
                           : 'Select team, roles, and positions to import'

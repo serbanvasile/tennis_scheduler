@@ -36,7 +36,6 @@ const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: stri
     { key: 'General', label: 'General' },
     { key: 'Participation', label: 'Participation' },
     { key: 'Teams', label: 'Teams & Roles' },
-    { key: 'Contract', label: 'Contract' },
     { key: 'Contact', label: 'Contact' },
     { key: 'Other', label: 'Other' }
   ];
@@ -595,7 +594,14 @@ export default function RosterScreen() {
         roleIds: t.roles.map((r: any) => r.role_id),
         positionIds: t.positions.map((p: any) => p.position_id),
         skillId: t.skill_id || null,
-        levelId: t.level_id || null
+        levelId: t.level_id || null,
+        // Contract fields (per-team)
+        shareType: t.share_type || 'F',
+        share: t.share ?? 100,
+        membershipId: t.membership_id || null,
+        paidStatusId: t.paid_status_id || null,
+        paidAmount: t.paid_amount ?? null,
+        activeTab: 'Assignments' // Default tab for team card
       }));
       setMemberTeams(mappedTeams);
 
@@ -749,7 +755,20 @@ export default function RosterScreen() {
     if (exists) {
       setMemberTeams(prev => prev.filter(mt => mt.teamId !== teamId));
     } else {
-      setMemberTeams(prev => [...prev, { teamId, roleIds: [], positionIds: [], skillId: null }]);
+      setMemberTeams(prev => [...prev, {
+        teamId,
+        roleIds: [],
+        positionIds: [],
+        skillId: null,
+        levelId: null,
+        // Contract fields defaults
+        shareType: 'F',
+        share: 100,
+        membershipId: null,
+        paidStatusId: null,
+        paidAmount: null,
+        activeTab: 'Assignments'
+      }]);
     }
   };
 
@@ -1098,278 +1117,324 @@ export default function RosterScreen() {
                           {team.name}
                         </Text>
 
-                        <Text style={[styles.label, { color: theme.colors.text }]}>Roles:</Text>
-                        <View style={styles.chipContainer}>
-                          {allRoles.map(r => {
-                            const active = mt.roleIds.includes(r.role_id);
+                        {/* Team Card Tabs */}
+                        <View style={[commonStyles.tabContainer, { marginTop: 8, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.border }]}>
+                          {['Assignments', 'Contract'].map(tab => {
+                            const isActive = (mt.activeTab || 'Assignments') === tab;
                             return (
                               <TouchableOpacity
-                                key={r.role_id}
-                                style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                                onPress={() => toggleRole(mt.teamId, r.role_id)}
-                              >
-                                <Text
-                                  style={[
-                                    styles.chipText,
-                                    { color: active ? theme.colors.buttonText : theme.colors.text },
-                                    active && { fontWeight: 'bold' }
-                                  ]}
-                                >
-                                  {r.name}
-                                </Text>
-                              </TouchableOpacity>
-                            )
-                          })}
-                        </View>
-
-                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Positions:</Text>
-                        <View style={styles.chipContainer}>
-                          {relevantPositions.map(p => {
-                            const active = mt.positionIds.includes(p.position_id);
-                            return (
-                              <TouchableOpacity
-                                key={p.position_id}
-                                style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                                onPress={() => togglePosition(mt.teamId, p.position_id)}
-                              >
-                                <Text
-                                  style={[
-                                    styles.chipText,
-                                    { color: active ? theme.colors.buttonText : theme.colors.text },
-                                    active && { fontWeight: 'bold' }
-                                  ]}
-                                >
-                                  {p.name}
-                                </Text>
-                              </TouchableOpacity>
-                            )
-                          })}
-                          {relevantPositions.length === 0 && <Text style={{ fontSize: 10, color: theme.colors.muted }}>No positions for this sport.</Text>}
-                        </View>
-
-                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Level:</Text>
-                        <View style={styles.chipContainer}>
-                          {allLevels.filter(l => l.name !== 'Open').map(l => {
-                            const active = mt.levelId === l.level_id;
-                            return (
-                              <TouchableOpacity
-                                key={l.level_id}
-                                style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                key={tab}
+                                style={[
+                                  commonStyles.tab,
+                                  isActive && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 },
+                                  { paddingHorizontal: 12 }
+                                ]}
                                 onPress={() => {
                                   setMemberTeams(prev => prev.map(t =>
-                                    t.teamId === mt.teamId ? { ...t, levelId: active ? null : l.level_id } : t
+                                    t.teamId === mt.teamId ? { ...t, activeTab: tab } : t
                                   ));
                                 }}
                               >
-                                <Text
-                                  style={[
-                                    styles.chipText,
-                                    { color: active ? theme.colors.buttonText : theme.colors.text },
-                                    active && { fontWeight: 'bold' }
-                                  ]}
-                                >
-                                  {l.name}
-                                </Text>
+                                <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>{tab}</Text>
                               </TouchableOpacity>
                             );
                           })}
                         </View>
 
-                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Skill Level:</Text>
-                        <View style={styles.chipContainer}>
-                          {(() => {
-                            // Filter skills for this team's sport
-                            const relevantSkills = allSkills.filter(s => s.sport_id === team.sport_id);
-                            const isKnownSkill = relevantSkills.some(s => s.skill_id === mt.skillId);
-                            // If skillId exists but is not in known skills, it's custom
-                            const isCustomSkill = !!mt.skillId && !isKnownSkill;
+                        {/* Assignments Tab Content */}
+                        {(mt.activeTab || 'Assignments') === 'Assignments' && (
+                          <>
 
-                            return (
-                              <>
-                                {relevantSkills.map(s => {
-                                  const active = mt.skillId === s.skill_id;
-                                  return (
-                                    <TouchableOpacity
-                                      key={s.skill_id}
-                                      style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                                      onPress={() => {
-                                        setMemberTeams(prev => prev.map(t =>
-                                          t.teamId === mt.teamId ? { ...t, skillId: s.skill_id } : t
-                                        ));
-                                      }}
-                                    >
-                                      <Text
-                                        style={[
-                                          styles.chipText,
-                                          { color: active ? theme.colors.buttonText : theme.colors.text },
-                                          active && { fontWeight: 'bold' }
-                                        ]}
-                                      >
-                                        {s.name}
-                                      </Text>
-                                    </TouchableOpacity>
-                                  );
-                                })}
-
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                  {/* Custom Skill Option */}
+                            <Text style={[styles.label, { color: theme.colors.text }]}>Roles:</Text>
+                            <View style={styles.chipContainer}>
+                              {allRoles.map(r => {
+                                const active = mt.roleIds.includes(r.role_id);
+                                return (
                                   <TouchableOpacity
-                                    style={[styles.chip, isCustomSkill ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                    key={r.role_id}
+                                    style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                    onPress={() => toggleRole(mt.teamId, r.role_id)}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.chipText,
+                                        { color: active ? theme.colors.buttonText : theme.colors.text },
+                                        active && { fontWeight: 'bold' }
+                                      ]}
+                                    >
+                                      {r.name}
+                                    </Text>
+                                  </TouchableOpacity>
+                                )
+                              })}
+                            </View>
+
+                            <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Positions:</Text>
+                            <View style={styles.chipContainer}>
+                              {relevantPositions.map(p => {
+                                const active = mt.positionIds.includes(p.position_id);
+                                return (
+                                  <TouchableOpacity
+                                    key={p.position_id}
+                                    style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                    onPress={() => togglePosition(mt.teamId, p.position_id)}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.chipText,
+                                        { color: active ? theme.colors.buttonText : theme.colors.text },
+                                        active && { fontWeight: 'bold' }
+                                      ]}
+                                    >
+                                      {p.name}
+                                    </Text>
+                                  </TouchableOpacity>
+                                )
+                              })}
+                              {relevantPositions.length === 0 && <Text style={{ fontSize: 10, color: theme.colors.muted }}>No positions for this sport.</Text>}
+                            </View>
+
+                            <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Level:</Text>
+                            <View style={styles.chipContainer}>
+                              {allLevels.filter(l => l.name !== 'Open').map(l => {
+                                const active = mt.levelId === l.level_id;
+                                return (
+                                  <TouchableOpacity
+                                    key={l.level_id}
+                                    style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
                                     onPress={() => {
-                                      if (!isCustomSkill) {
-                                        setMemberTeams(prev => prev.map(t =>
-                                          t.teamId === mt.teamId ? { ...t, skillId: 'Custom' } : t
-                                        ));
-                                      } else {
-                                        setMemberTeams(prev => prev.map(t =>
-                                          t.teamId === mt.teamId ? { ...t, skillId: null } : t
-                                        ));
-                                      }
+                                      setMemberTeams(prev => prev.map(t =>
+                                        t.teamId === mt.teamId ? { ...t, levelId: active ? null : l.level_id } : t
+                                      ));
                                     }}
                                   >
                                     <Text
                                       style={[
                                         styles.chipText,
-                                        { color: isCustomSkill ? theme.colors.buttonText : theme.colors.text },
-                                        isCustomSkill && { fontWeight: 'bold' }
+                                        { color: active ? theme.colors.buttonText : theme.colors.text },
+                                        active && { fontWeight: 'bold' }
                                       ]}
                                     >
-                                      Custom
+                                      {l.name}
                                     </Text>
                                   </TouchableOpacity>
+                                );
+                              })}
+                            </View>
 
-                                  {/* Custom Skill Input */}
-                                  {isCustomSkill && (
-                                    <TextInput
-                                      style={[
-                                        styles.chip,
-                                        {
-                                          minWidth: 60,
-                                          borderColor: theme.colors.primary,
-                                          color: theme.colors.text,
-                                          backgroundColor: theme.colors.surface,
-                                          paddingHorizontal: 8,
-                                          textAlignVertical: 'center'
-                                        }
-                                      ]}
-                                      value={mt.skillId === 'Custom' ? '' : (allSkills.find(s => s.skill_id === mt.skillId)?.name || mt.skillId)}
-                                      placeholder="Enter skill"
-                                      placeholderTextColor={theme.colors.muted}
-                                      onChangeText={(text) => {
-                                        setMemberTeams(prev => prev.map(t =>
-                                          t.teamId === mt.teamId ? { ...t, skillId: text } : t
-                                        ));
-                                      }}
-                                    />
-                                  )}
-                                </View>
-                              </>
-                            );
-                          })()}
-                        </View>
+                            <Text style={[styles.label, { color: theme.colors.text, marginTop: 8 }]}>Skill Level:</Text>
+                            <View style={styles.chipContainer}>
+                              {(() => {
+                                // Filter skills for this team's sport
+                                const relevantSkills = allSkills.filter(s => s.sport_id === team.sport_id);
+                                const isKnownSkill = relevantSkills.some(s => s.skill_id === mt.skillId);
+                                // If skillId exists but is not in known skills, it's custom
+                                const isCustomSkill = !!mt.skillId && !isKnownSkill;
+
+                                return (
+                                  <>
+                                    {relevantSkills.map(s => {
+                                      const active = mt.skillId === s.skill_id;
+                                      return (
+                                        <TouchableOpacity
+                                          key={s.skill_id}
+                                          style={[styles.chip, active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                          onPress={() => {
+                                            setMemberTeams(prev => prev.map(t =>
+                                              t.teamId === mt.teamId ? { ...t, skillId: s.skill_id } : t
+                                            ));
+                                          }}
+                                        >
+                                          <Text
+                                            style={[
+                                              styles.chipText,
+                                              { color: active ? theme.colors.buttonText : theme.colors.text },
+                                              active && { fontWeight: 'bold' }
+                                            ]}
+                                          >
+                                            {s.name}
+                                          </Text>
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                      {/* Custom Skill Option */}
+                                      <TouchableOpacity
+                                        style={[styles.chip, isCustomSkill ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                        onPress={() => {
+                                          if (!isCustomSkill) {
+                                            setMemberTeams(prev => prev.map(t =>
+                                              t.teamId === mt.teamId ? { ...t, skillId: 'Custom' } : t
+                                            ));
+                                          } else {
+                                            setMemberTeams(prev => prev.map(t =>
+                                              t.teamId === mt.teamId ? { ...t, skillId: null } : t
+                                            ));
+                                          }
+                                        }}
+                                      >
+                                        <Text
+                                          style={[
+                                            styles.chipText,
+                                            { color: isCustomSkill ? theme.colors.buttonText : theme.colors.text },
+                                            isCustomSkill && { fontWeight: 'bold' }
+                                          ]}
+                                        >
+                                          Custom
+                                        </Text>
+                                      </TouchableOpacity>
+
+                                      {/* Custom Skill Input */}
+                                      {isCustomSkill && (
+                                        <TextInput
+                                          style={[
+                                            styles.chip,
+                                            {
+                                              minWidth: 60,
+                                              borderColor: theme.colors.primary,
+                                              color: theme.colors.text,
+                                              backgroundColor: theme.colors.surface,
+                                              paddingHorizontal: 8,
+                                              textAlignVertical: 'center'
+                                            }
+                                          ]}
+                                          value={mt.skillId === 'Custom' ? '' : (allSkills.find(s => s.skill_id === mt.skillId)?.name || mt.skillId)}
+                                          placeholder="Enter skill"
+                                          placeholderTextColor={theme.colors.muted}
+                                          onChangeText={(text) => {
+                                            setMemberTeams(prev => prev.map(t =>
+                                              t.teamId === mt.teamId ? { ...t, skillId: text } : t
+                                            ));
+                                          }}
+                                        />
+                                      )}
+                                    </View>
+                                  </>
+                                );
+                              })()}
+                            </View>
+                          </>
+                        )}
+
+                        {/* Contract Tab Content */}
+                        {mt.activeTab === 'Contract' && (
+                          <>
+                            {/* Share Type */}
+                            <View style={styles.inputGroup}>
+                              <Text style={[styles.label, { color: theme.colors.text }]}>Share Type</Text>
+                              <View style={styles.chipContainer}>
+                                {[['R', 'OQ', 'OT', 'H'], ['TT', 'TQ', 'F', 'C']].map((row, rowIdx) => (
+                                  <View key={rowIdx} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                    {row.map(type => {
+                                      const isSelected = mt.shareType === type;
+                                      return (
+                                        <TouchableOpacity
+                                          key={type}
+                                          style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                          onPress={() => {
+                                            setMemberTeams(prev => prev.map(t =>
+                                              t.teamId === mt.teamId ? {
+                                                ...t,
+                                                shareType: type,
+                                                share: type !== 'C' ? (SHARE_TYPE_MAP[type] || 0) : t.share
+                                              } : t
+                                            ));
+                                          }}
+                                        >
+                                          <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                  </View>
+                                ))}
+                              </View>
+                            </View>
+
+                            {/* Share Percentage */}
+                            <View style={styles.inputGroup}>
+                              <Text style={[styles.label, { color: theme.colors.text }]}>Share (%)</Text>
+                              <TextInput
+                                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 80, textAlign: 'center' }]}
+                                value={(mt.share ?? 100).toString()}
+                                editable={mt.shareType === 'C'}
+                                onChangeText={(text) => {
+                                  const num = parseInt(text) || 0;
+                                  setMemberTeams(prev => prev.map(t =>
+                                    t.teamId === mt.teamId ? { ...t, share: Math.min(100, Math.max(0, num)) } : t
+                                  ));
+                                }}
+                                keyboardType="decimal-pad"
+                                placeholder="0"
+                                placeholderTextColor={theme.colors.muted}
+                              />
+                            </View>
+
+                            {/* Membership */}
+                            <View style={styles.inputGroup}>
+                              <Text style={[styles.label, { color: theme.colors.text }]}>Membership</Text>
+                              <View style={styles.chipContainer}>
+                                {allMemberships.map(m => {
+                                  const isSelected = mt.membershipId === m.membership_id;
+                                  return (
+                                    <TouchableOpacity
+                                      key={m.membership_id}
+                                      style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                      onPress={() => setMemberTeams(prev => prev.map(t =>
+                                        t.teamId === mt.teamId ? { ...t, membershipId: isSelected ? null : m.membership_id } : t
+                                      ))}
+                                    >
+                                      <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{m.name}</Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                            </View>
+
+                            {/* Paid Status */}
+                            <View style={styles.inputGroup}>
+                              <Text style={[styles.label, { color: theme.colors.text }]}>Paid Status</Text>
+                              <View style={styles.chipContainer}>
+                                {allPaidStatuses.map(ps => {
+                                  const isSelected = mt.paidStatusId === ps.paid_status_id;
+                                  return (
+                                    <TouchableOpacity
+                                      key={ps.paid_status_id}
+                                      style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
+                                      onPress={() => setMemberTeams(prev => prev.map(t =>
+                                        t.teamId === mt.teamId ? { ...t, paidStatusId: isSelected ? null : ps.paid_status_id } : t
+                                      ))}
+                                    >
+                                      <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{ps.name}</Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                            </View>
+
+                            {/* Paid Amount */}
+                            <View style={styles.inputGroup}>
+                              <Text style={[styles.label, { color: theme.colors.text }]}>Paid Amount ($)</Text>
+                              <TextInput
+                                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 120, textAlign: 'center' }]}
+                                value={(mt.paidAmount ?? '').toString()}
+                                onChangeText={(text) => {
+                                  setMemberTeams(prev => prev.map(t =>
+                                    t.teamId === mt.teamId ? { ...t, paidAmount: text ? parseFloat(text) : null } : t
+                                  ));
+                                }}
+                                keyboardType="decimal-pad"
+                                placeholder="0.00"
+                                placeholderTextColor={theme.colors.muted}
+                              />
+                            </View>
+                          </>
+                        )}
                       </View>
                     );
                   })}
                   {memberTeams.length === 0 && <Text style={{ color: theme.colors.muted, marginTop: 20 }}>Select a team above to configure roles.</Text>}
                 </View>
-              ) : activeTab === 'Contract' ? (
-                <>
-                  {/* Share Type */}
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.colors.text }]}>Share Type</Text>
-                    <View style={styles.chipContainer}>
-                      {[['R', 'OQ', 'OT', 'H'], ['TT', 'TQ', 'F', 'C']].map((row, rowIdx) => (
-                        <View key={rowIdx} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                          {row.map(type => {
-                            const isSelected = shareType === type;
-                            return (
-                              <TouchableOpacity
-                                key={type}
-                                style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                                onPress={() => {
-                                  setShareType(type);
-                                  if (type !== 'C') {
-                                    setShare((SHARE_TYPE_MAP[type] || 0).toString());
-                                  }
-                                }}
-                              >
-                                <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{type}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Share Percentage - only editable for Custom */}
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.colors.text }]}>Share (%)</Text>
-                    <TextInput
-                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 80, textAlign: 'center' }]}
-                      value={share}
-                      editable={shareType === 'C'}
-                      onChangeText={(t) => {
-                        const num = parseInt(t) || 0;
-                        setShare(Math.min(100, Math.max(0, num)).toString());
-                      }}
-                      keyboardType="decimal-pad"
-                      placeholder="0"
-                      placeholderTextColor={theme.colors.muted}
-                    />
-                  </View>
-
-                  {/* Membership (v2) */}
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.colors.text }]}>Membership</Text>
-                    <View style={styles.chipContainer}>
-                      {allMemberships.map(m => {
-                        const isSelected = membershipId === m.membership_id;
-                        return (
-                          <TouchableOpacity
-                            key={m.membership_id}
-                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                            onPress={() => setMembershipId(isSelected ? null : m.membership_id)}
-                          >
-                            <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{m.name}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* Paid Status (v2) */}
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.colors.text }]}>Paid Status</Text>
-                    <View style={styles.chipContainer}>
-                      {allPaidStatuses.map(ps => {
-                        const isSelected = paidStatusId === ps.paid_status_id;
-                        return (
-                          <TouchableOpacity
-                            key={ps.paid_status_id}
-                            style={[styles.chip, isSelected ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : { borderColor: theme.colors.border }]}
-                            onPress={() => setPaidStatusId(isSelected ? null : ps.paid_status_id)}
-                          >
-                            <Text style={{ color: isSelected ? theme.colors.buttonText : theme.colors.text, fontWeight: isSelected ? 'bold' : 'normal' }}>{ps.name}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* Paid Amount (v2) */}
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.colors.text }]}>Paid Amount ($)</Text>
-                    <TextInput
-                      style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, width: 120, textAlign: 'center' }]}
-                      value={paidAmount}
-                      onChangeText={setPaidAmount}
-                      keyboardType="decimal-pad"
-                      placeholder="0.00"
-                      placeholderTextColor={theme.colors.muted}
-                    />
-                  </View>
-                </>
               ) : activeTab === 'Contact' ? (
                 <View>
                   <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Contact Information</Text>
