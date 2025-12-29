@@ -591,24 +591,15 @@ export default function CalendarScreen() {
   };
 
   const promptDeleteAll = () => {
-    // Get filtered events based on current search chips
-    const filteredEvents = filterItemsByChips(
+    // Get filtered events based on current search chips (use time-aware filter for keywords like 'current', 'future', 'past')
+    const filteredEvents = filterEventsWithTimeKeywords(
       events,
       searchChips,
       (event) => {
         const dateStr = formatDateForSearch(event.start_date);
         const timeStr = formatTimeForSearch(event.start_date);
         const seriesBadge = event.is_series_event ? 'SERIES' : '';
-        return `
-          ${event.name}
-          ${event.description || ''}
-          ${dateStr}
-          ${timeStr}
-          ${event.event_type_names || ''}
-          ${event.system_names || ''}
-          ${event.venue_names || ''}
-          ${seriesBadge}
-        `;
+        return `${event.name} ${event.description || ''} ${dateStr} ${timeStr} ${event.event_type_names || ''} ${event.system_names || ''} ${event.venue_names || ''} ${seriesBadge}`;
       },
       searchMode
     );
