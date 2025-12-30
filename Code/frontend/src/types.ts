@@ -27,6 +27,26 @@ export interface Team {
   colors?: Color[]; // New linked colors
 }
 
+// Team context within a member (team_member_xref enriched)
+export interface MemberTeam {
+  team_id: number | string;
+  team_name: string;
+  sport_name?: string;
+  skill_id?: number | string;
+  skill_name?: string;
+  level_id?: number | string;
+  level_name?: string;
+  share?: number;
+  share_type?: string;
+  membership_id?: number | string;
+  paid_status_id?: number | string;
+  paid_amount?: number;
+  role_names?: string;
+  position_names?: string;
+  positions?: { id: string; name: string }[];
+  roles?: { role_id: string; name: string }[];
+}
+
 export interface Role {
   role_id: number | string;
   guid: string;
@@ -57,7 +77,7 @@ export interface Member {
   email?: string;
   role_name?: string; // from relationship
   joined_date?: number;
-  teams?: Team[];
+  teams?: MemberTeam[];
   contacts?: any[];
 }
 
@@ -214,3 +234,54 @@ export interface FairnessMetrics {
   opponentVariety: number;
   courtDistribution: number;
 }
+
+// ============================================================================
+// MATCHES TYPES (v5)
+// ============================================================================
+
+export interface MatchPlayer {
+  member_id: number | string;
+  team_side: 'A' | 'B';
+  position_slot?: string;
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
+  skill_id?: number | string;
+  skill_name?: string;
+  share?: number;
+  share_type?: string;
+}
+
+export interface EventMatch {
+  match_id: number | string;
+  guid?: string;
+  event_id: number | string;
+  court_id?: number | string;
+  field_id?: number | string;
+  court_name?: string;
+  field_name?: string;
+  match_type_id?: number | string;
+  match_type_name?: string;
+  status: 'scheduled' | 'in_progress' | 'completed';
+  team_a_players: MatchPlayer[];
+  team_b_players: MatchPlayer[];
+  team_a_skill_avg?: number;
+  team_b_skill_avg?: number;
+  match_order?: number;
+}
+
+// Court schematic position types for different sports
+export interface CourtPosition {
+  id: string;
+  label: string;
+  x: number; // percentage from left
+  y: number; // percentage from top
+  team_side: 'A' | 'B';
+}
+
+export interface CourtLayout {
+  sport_id: number | string;
+  name: string;
+  positions: CourtPosition[];
+}
+

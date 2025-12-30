@@ -21,6 +21,7 @@ import { ScreenHeader } from './ScreenHeader';
 import { ConfirmationModal } from './ConfirmationModal';
 import { SearchWithChips } from './SearchWithChips';
 import { filterItemsByChips, formatDateForSearch, formatTimeForSearch } from '../utils/searchUtils';
+import { MatchesTab } from './MatchesTab';
 
 // Form state interface for event creation/editing
 interface EventFormState {
@@ -165,6 +166,12 @@ const Tabs = ({ activeTab, onChange }: { activeTab: string, onChange: (tab: stri
       >
         <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>Participants</Text>
       </TouchableOpacity>
+      <TouchableOpacity
+        style={[commonStyles.tab, activeTab === 'Matches' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 2 }]}
+        onPress={() => onChange('Matches')}
+      >
+        <Text style={[commonStyles.tabText, { color: theme.colors.text }]}>Matches</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -235,6 +242,7 @@ export default function CalendarScreen() {
   const [genders, setGenders] = useState<any[]>([]);
   const [levels, setLevels] = useState<any[]>([]);
   const [matchTypes, setMatchTypes] = useState<any[]>([]);
+  const [pendingMatches, setPendingMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingEventId, setEditingEventId] = useState<number | string | null>(null);
@@ -491,12 +499,14 @@ export default function CalendarScreen() {
 
       console.log('💾 Saving event with data:', eventData);
 
+      let newEventId: string | number | null = editingEventId;
+
       if (editingEventId) {
         // Update existing event
         await databaseService.updateEvent(editingEventId, eventData);
       } else {
         // Create new event (with optional series)
-        await databaseService.createEvent({
+        const result = await databaseService.createEvent({
           ...eventData,
           isSeriesEvent: formState.isSeriesEvent,
           repeatPeriod: formState.isSeriesEvent ? formState.repeatPeriod : undefined,
@@ -507,6 +517,13 @@ export default function CalendarScreen() {
             : undefined,
           lastEventTime: formState.isSeriesEvent ? formState.lastEventTime : undefined
         });
+        newEventId = result?.event_id || null;
+      }
+
+      // Save matches if any were created in the Matches tab
+      if (newEventId && pendingMatches.length > 0) {
+        await databaseService.saveEventMatches(newEventId, pendingMatches);
+        setPendingMatches([]);
       }
 
       setShowModal(false);
@@ -1724,6 +1741,28 @@ export default function CalendarScreen() {
         </>
       )
       }
+
+      {/* Matches Tab */}
+      {activeTab === 'Matches' && (
+        <MatchesTab
+          eventId={editingEventId}
+          courtIds={formState.courtIds}
+          fieldIds={formState.fieldIds}
+          memberIds={formState.memberIds}
+          teamIds={formState.teamIds}
+          isSeriesEvent={formState.isSeriesEvent}
+          matchTypeIds={formState.matchTypeIds}
+          members={members}
+          teams={teams}
+          matchTypes={matchTypes}
+          availableCourts={availableCourts}
+          onMatchesChange={setPendingMatches}
+          ageGroupIds={formState.ageGroupIds}
+          genderIds={formState.genderIds}
+          levelIds={formState.levelIds}
+          genders={genders}
+        />
+      )}
     </ScrollView >
   );
 

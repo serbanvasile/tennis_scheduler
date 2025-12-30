@@ -22,7 +22,7 @@ interface LegacyLeague {
 }
 
 interface LegacyPlayer {
-    id: DID;
+    id: string | number;
     displayName: string;
     skill: number;
     handed?: 'L' | 'R' | 'A';
@@ -68,16 +68,16 @@ interface LegacyStoreState {
     matches: LegacyMatch[];
     scores: any[];
     availability: any[];
-    highlightPlayer: DID | null;
-    mainPlayer: DID | null;
+    highlightPlayer: string | number | null;
+    mainPlayer: string | number | null;
     playerStats: Record<string, PlayerStats>;
 
-    setHighlightPlayer: (id: DID | null) => void;
-    setMainPlayer: (id: DID | null) => void;
+    setHighlightPlayer: (id: string | number | null) => void;
+    setMainPlayer: (id: string | number | null) => void;
     generateWeek: (index: number) => void;
-    makeSchedule: (weekId: string) => void;
-    calculatePlayerStats: (playerId: DID) => PlayerStats;
-    calculateFairnessMetrics: (weekId?: string) => FairnessMetrics;
+    makeSchedule: (weekId: string | number) => void;
+    calculatePlayerStats: (playerId: string | number) => PlayerStats;
+    calculateFairnessMetrics: (weekId?: string | number) => FairnessMetrics;
 }
 
 // Default empty fairness metrics
@@ -125,12 +125,12 @@ export const useStore = create<LegacyStoreState>((set, get) => ({
         // No-op in stub, will be implemented in Phase 2
     },
 
-    calculatePlayerStats: (playerId: DID): PlayerStats => {
+    calculatePlayerStats: (playerId: string | number): PlayerStats => {
         // Return stub stats - real implementation would aggregate from matches
         return defaultPlayerStats;
     },
 
-    calculateFairnessMetrics: (weekId?: string): FairnessMetrics => {
+    calculateFairnessMetrics: (weekId?: string | number): FairnessMetrics => {
         // Return stub metrics - real implementation would calculate from matches
         return defaultFairness;
     },

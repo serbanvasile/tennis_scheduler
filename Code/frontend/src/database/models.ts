@@ -658,6 +658,45 @@ export class MemberPaidStatusXref extends Model {
 }
 
 // ============================================================================
+// MATCH MODELS (for match assignments)
+// ============================================================================
+
+export class Match extends Model {
+  static table = 'matches';
+
+  get guid() { return this._getRaw('guid') as string | null; }
+  get eventId() { return this._getRaw('event_id') as string; }
+  set eventId(value: string) { this._setRaw('event_id', value); }
+  get courtId() { return this._getRaw('court_id') as string | null; }
+  set courtId(value: string | null) { this._setRaw('court_id', value); }
+  get fieldId() { return this._getRaw('field_id') as string | null; }
+  set fieldId(value: string | null) { this._setRaw('field_id', value); }
+  get matchTypeId() { return this._getRaw('match_type_id') as string | null; }
+  set matchTypeId(value: string | null) { this._setRaw('match_type_id', value); }
+  get status() { return this._getRaw('status') as string | null; }
+  set status(value: string | null) { this._setRaw('status', value); }
+  get teamASkillAvg() { return this._getRaw('team_a_skill_avg') as number | null; }
+  set teamASkillAvg(value: number | null) { this._setRaw('team_a_skill_avg', value); }
+  get teamBSkillAvg() { return this._getRaw('team_b_skill_avg') as number | null; }
+  set teamBSkillAvg(value: number | null) { this._setRaw('team_b_skill_avg', value); }
+  get matchOrder() { return this._getRaw('match_order') as number | null; }
+  set matchOrder(value: number | null) { this._setRaw('match_order', value); }
+}
+
+export class MatchPlayerXref extends Model {
+  static table = 'match_player_xref';
+
+  get matchId() { return this._getRaw('match_id') as string; }
+  set matchId(value: string) { this._setRaw('match_id', value); }
+  get memberId() { return this._getRaw('member_id') as string; }
+  set memberId(value: string) { this._setRaw('member_id', value); }
+  get teamSide() { return this._getRaw('team_side') as string; }
+  set teamSide(value: string) { this._setRaw('team_side', value); }
+  get positionSlot() { return this._getRaw('position_slot') as string | null; }
+  set positionSlot(value: string | null) { this._setRaw('position_slot', value); }
+}
+
+// ============================================================================
 // MODEL CLASSES ARRAY (for database initialization)
 // ============================================================================
 
@@ -722,4 +761,7 @@ export const modelClasses = [
   MemberGenderXref,
   MemberMembershipXref,
   MemberPaidStatusXref,
+  // Match models
+  Match,
+  MatchPlayerXref,
 ];

@@ -11,7 +11,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // create_user, create_date, update_user, update_date, deleted_flag
 
 export const schema = appSchema({
-  version: 4,
+  version: 5,
   tables: [
     // ============================================================================
     // CORE TABLES
@@ -871,6 +871,47 @@ export const schema = appSchema({
       columns: [
         { name: 'member_id', type: 'string', isIndexed: true },
         { name: 'paid_status_id', type: 'string', isIndexed: true },
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // ============================================================================
+    // MATCHES TABLES (v5) - Match Assignments
+    // ============================================================================
+
+    // matches - stores match instances for events
+    tableSchema({
+      name: 'matches',
+      columns: [
+        { name: 'guid', type: 'string', isOptional: true },
+        { name: 'event_id', type: 'string', isIndexed: true },
+        { name: 'court_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'field_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'match_type_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'status', type: 'string', isOptional: true }, // 'scheduled', 'in_progress', 'completed'
+        { name: 'team_a_skill_avg', type: 'number', isOptional: true },
+        { name: 'team_b_skill_avg', type: 'number', isOptional: true },
+        { name: 'match_order', type: 'number', isOptional: true }, // Order of match on the court
+        { name: 'create_user', type: 'string', isOptional: true },
+        { name: 'create_date', type: 'number', isOptional: true },
+        { name: 'update_user', type: 'string', isOptional: true },
+        { name: 'update_date', type: 'number', isOptional: true },
+        { name: 'deleted_flag', type: 'number', isOptional: true },
+      ],
+    }),
+
+    // match_player_xref - links players to matches with position
+    tableSchema({
+      name: 'match_player_xref',
+      columns: [
+        { name: 'match_id', type: 'string', isIndexed: true },
+        { name: 'member_id', type: 'string', isIndexed: true },
+        { name: 'team_side', type: 'string' }, // 'A' or 'B'
+        { name: 'position_slot', type: 'string', isOptional: true }, // e.g., 'deuce', 'ad', 'server'
         { name: 'create_user', type: 'string', isOptional: true },
         { name: 'create_date', type: 'number', isOptional: true },
         { name: 'update_user', type: 'string', isOptional: true },

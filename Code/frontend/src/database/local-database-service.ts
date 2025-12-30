@@ -56,6 +56,9 @@ import {
     MemberGenderXref,
     MemberMembershipXref,
     MemberPaidStatusXref,
+    // Match models
+    Match as MatchModel,
+    MatchPlayerXref,
 } from './models';
 import type { Member, Team, Venue, TennisEvent, Player, Color, Sport, Skill, Role, Position, System } from '../types';
 
@@ -470,6 +473,10 @@ class LocalDatabaseService {
 
     async getMembers(): Promise<Member[]> {
         try {
+            // DEBUG: Dump all skills to see what we are working with
+            const allSkills = await database.get<SkillModel>('skills').query().fetch();
+            console.log('[getMembers] ALL SKILLS IN DB:', allSkills.map(s => ({ id: s.id, guid: s.guid, name: s.name })));
+
             const members = await database.get<MemberModel>('members').query(
                 Q.where('deleted_flag', Q.notEq(1))
             ).fetch();
@@ -495,6 +502,59 @@ class LocalDatabaseService {
                                 const sport = await database.get<SportModel>('sports').find(sportXrefs[0].sportId);
                                 sportName = sport?.name || '';
                             } catch { }
+                        }
+
+                        // Get skill name
+                        let skillName = '';
+                        if (xref.skillId) {
+                            try {
+                                const skill = await database.get<SkillModel>('skills').find(xref.skillId);
+                                skillName = skill?.name || `S:${xref.skillId}`;
+                            } catch {
+                                // Fallback: try stripping suffix (migration artifact fix)
+                                const cleanId = xref.skillId.split('_')[0];
+                                try {
+                                    const skill = await database.get<SkillModel>('skills').find(cleanId);
+                                    skillName = skill?.name || `S:${cleanId}`;
+                                } catch {
+                                    // Fallback: try querying by GUID
+                                    try {
+                                        const skills = await database.get<SkillModel>('skills').query(
+                                            Q.where('guid', xref.skillId)
+                                        ).fetch();
+                                        if (skills.length > 0) {
+                                            skillName = skills[0].name;
+                                        } else {
+                                            skillName = `Err:${xref.skillId}`;
+                                        }
+                                    } catch (e) {
+                                        skillName = `Err:${xref.skillId}`;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Get level name
+                        let levelName = '';
+                        if (xref.levelId) {
+                            try {
+                                const level = await database.get<LevelModel>('levels').find(xref.levelId);
+                                levelName = level?.name || `L:${xref.levelId}`;
+                            } catch {
+                                // Fallback: try querying by GUID
+                                try {
+                                    const levels = await database.get<LevelModel>('levels').query(
+                                        Q.where('guid', xref.levelId)
+                                    ).fetch();
+                                    if (levels.length > 0) {
+                                        levelName = levels[0].name;
+                                    } else {
+                                        levelName = `Ms:${xref.levelId}`;
+                                    }
+                                } catch {
+                                    levelName = `Err:${xref.levelId}`;
+                                }
+                            }
                         }
 
                         // Get roles via member_role_xref (for this team context)
@@ -538,7 +598,9 @@ class LocalDatabaseService {
                             team_name: team.name,
                             sport_name: sportName,
                             skill_id: xref.skillId,
+                            skill_name: skillName,
                             level_id: xref.levelId, // Include level_id for filtering
+                            level_name: levelName,
                             // Contract fields (per-team)
                             share_type: xref.shareType,
                             share: xref.share,
@@ -666,6 +728,60 @@ class LocalDatabaseService {
             try {
                 const team = await database.get<TeamModel>('teams').find(xref.teamId);
 
+                // Get skill name
+                let skillName = '';
+                if (xref.skillId) {
+                    try {
+                        const skill = await database.get<SkillModel>('skills').find(xref.skillId);
+                        skillName = skill?.name || `S:${xref.skillId}`;
+                    } catch {
+                        // Fallback: try stripping suffix (migration artifact fix)
+                        const cleanId = xref.skillId.split('_')[0];
+                        try {
+                            const skill = await database.get<SkillModel>('skills').find(cleanId);
+                            skillName = skill?.name || `S:${cleanId}`;
+                        } catch {
+                            // Fallback: try querying by GUID
+                            try {
+                                const skills = await database.get<SkillModel>('skills').query(
+                                    Q.where('guid', xref.skillId)
+                                ).fetch();
+                                if (skills.length > 0) {
+                                    skillName = skills[0].name;
+                                } else {
+                                    skillName = `Err:${xref.skillId}`;
+                                }
+                            } catch (e) {
+                                skillName = `Err:${xref.skillId}`;
+                            }
+                        }
+                    }
+                }
+
+
+                // Get level name
+                let levelName = '';
+                if (xref.levelId) {
+                    try {
+                        const level = await database.get<LevelModel>('levels').find(xref.levelId);
+                        levelName = level?.name || `L:${xref.levelId}`;
+                    } catch {
+                        // Fallback: try querying by GUID
+                        try {
+                            const levels = await database.get<LevelModel>('levels').query(
+                                Q.where('guid', xref.levelId)
+                            ).fetch();
+                            if (levels.length > 0) {
+                                levelName = levels[0].name;
+                            } else {
+                                levelName = `Ms:${xref.levelId}`;
+                            }
+                        } catch {
+                            levelName = `Err:${xref.levelId}`;
+                        }
+                    }
+                }
+
                 // Get roles for this team
                 const roleXrefs = await database.get<MemberRoleXref>('member_role_xref').query(
                     Q.and(
@@ -702,7 +818,9 @@ class LocalDatabaseService {
                     team_id: team.id,
                     name: team.name,
                     skill_id: xref.skillId,
+                    skill_name: skillName,
                     level_id: xref.levelId,
+                    level_name: levelName,
                     // Contract fields (per-team)
                     share_type: xref.shareType,
                     share: xref.share,
@@ -2333,6 +2451,132 @@ class LocalDatabaseService {
     parseClipboardData(text: string): any[] {
         // Legacy support
         return [];
+    }
+
+    // ============================================================================
+    // MATCHES
+    // ============================================================================
+
+    async getEventMatches(eventId: number | string): Promise<any[]> {
+        try {
+            const matches = await database.get<MatchModel>('matches').query(
+                Q.where('event_id', eventId.toString()),
+                Q.where('deleted_flag', Q.notEq(1))
+            ).fetch();
+
+            const result: any[] = [];
+            for (const match of matches) {
+                // Get players for this match
+                const playerXrefs = await database.get<MatchPlayerXref>('match_player_xref').query(
+                    Q.where('match_id', match.id)
+                ).fetch();
+
+                const team_a_players: any[] = [];
+                const team_b_players: any[] = [];
+
+                for (const xref of playerXrefs) {
+                    try {
+                        const member = await database.get<MemberModel>('members').find(xref.memberId);
+                        const playerData = {
+                            member_id: xref.memberId,
+                            team_side: xref.teamSide,
+                            position_slot: xref.positionSlot,
+                            first_name: member.firstName,
+                            last_name: member.lastName,
+                        };
+                        if (xref.teamSide === 'A') {
+                            team_a_players.push(playerData);
+                        } else {
+                            team_b_players.push(playerData);
+                        }
+                    } catch { }
+                }
+
+                result.push({
+                    match_id: match.id,
+                    event_id: match.eventId,
+                    court_id: match.courtId,
+                    field_id: match.fieldId,
+                    match_type_id: match.matchTypeId,
+                    status: match.status,
+                    team_a_skill_avg: match.teamASkillAvg,
+                    team_b_skill_avg: match.teamBSkillAvg,
+                    match_order: match.matchOrder,
+                    team_a_players,
+                    team_b_players,
+                });
+            }
+
+            return result;
+        } catch (err) {
+            console.error('getEventMatches failed', err);
+            return [];
+        }
+    }
+
+    async saveEventMatches(eventId: number | string, matchesData: any[]): Promise<any> {
+        try {
+            await database.write(async () => {
+                // Delete existing matches for this event
+                const existingMatches = await database.get<MatchModel>('matches').query(
+                    Q.where('event_id', eventId.toString())
+                ).fetch();
+
+                for (const match of existingMatches) {
+                    // Delete player xrefs first
+                    const xrefs = await database.get<MatchPlayerXref>('match_player_xref').query(
+                        Q.where('match_id', match.id)
+                    ).fetch();
+                    for (const xref of xrefs) {
+                        await xref.destroyPermanently();
+                    }
+                    await match.destroyPermanently();
+                }
+
+                // Create new matches
+                for (const matchData of matchesData) {
+                    const match = await database.get<MatchModel>('matches').create(m => {
+                        (m as any)._setRaw('guid', generateGuid());
+                        m.eventId = eventId.toString();
+                        m.courtId = matchData.court_id?.toString() || null;
+                        m.fieldId = matchData.field_id?.toString() || null;
+                        m.matchTypeId = matchData.match_type_id?.toString() || null;
+                        m.status = matchData.status || 'scheduled';
+                        m.matchOrder = matchData.match_order || 1;
+                        (m as any)._setRaw('create_date', Date.now());
+                    });
+
+                    // Add team A players
+                    if (matchData.team_a_players) {
+                        for (const player of matchData.team_a_players) {
+                            await database.get<MatchPlayerXref>('match_player_xref').create(x => {
+                                x.matchId = match.id;
+                                x.memberId = player.member_id.toString();
+                                x.teamSide = 'A';
+                                x.positionSlot = player.position_slot || null;
+                            });
+                        }
+                    }
+
+                    // Add team B players
+                    if (matchData.team_b_players) {
+                        for (const player of matchData.team_b_players) {
+                            await database.get<MatchPlayerXref>('match_player_xref').create(x => {
+                                x.matchId = match.id;
+                                x.memberId = player.member_id.toString();
+                                x.teamSide = 'B';
+                                x.positionSlot = player.position_slot || null;
+                            });
+                        }
+                    }
+                }
+            });
+
+            return { success: true, count: matchesData.length };
+        } catch (err) {
+            console.error('saveEventMatches failed', err);
+            return { error: err };
+        }
     }
 }
 

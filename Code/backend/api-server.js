@@ -943,6 +943,41 @@ function initializeDatabase() {
         FOREIGN KEY(season_id) REFERENCES seasons(season_id)
       )`);
 
+    // ============================================================================
+    // MATCHES TABLES (v5) - Match Assignments
+    // ============================================================================
+
+    // 19. matches - stores match instances for events
+    db.run(`CREATE TABLE IF NOT EXISTS matches(
+        match_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guid TEXT UNIQUE,
+        event_id INTEGER NOT NULL,
+        court_id INTEGER,
+        field_id INTEGER,
+        match_type_id INTEGER,
+        status TEXT DEFAULT 'scheduled', -- 'scheduled', 'in_progress', 'completed'
+        team_a_skill_avg REAL,
+        team_b_skill_avg REAL,
+        match_order INTEGER,
+        ${standardFields},
+        FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+        FOREIGN KEY(court_id) REFERENCES courts(court_id),
+        FOREIGN KEY(field_id) REFERENCES fields(field_id),
+        FOREIGN KEY(match_type_id) REFERENCES match_types(match_type_id)
+      )`);
+
+    // 20. match_player_xref - links players to matches with position
+    db.run(`CREATE TABLE IF NOT EXISTS match_player_xref(
+        ref_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_id INTEGER NOT NULL,
+        member_id INTEGER NOT NULL,
+        team_side TEXT NOT NULL, -- 'A' or 'B'
+        position_slot TEXT, -- e.g., 'deuce', 'ad', 'server'
+        ${standardFields},
+        FOREIGN KEY(match_id) REFERENCES matches(match_id) ON DELETE CASCADE,
+        FOREIGN KEY(member_id) REFERENCES members(member_id)
+      )`);
+
     console.log('Database tables initialized.');
     seedReferenceData();
   });
@@ -2602,6 +2637,295 @@ app.put('/api/fields/:id/delete', (req, res) => {
     if (err) return sendError(res, err, 'Failed to delete field');
     res.json({ deleted: this.changes });
   });
+});
+
+// ============================================================================
+// MATCHES API ENDPOINTS
+// ============================================================================
+
+// Get all matches for an event
+app.get('/api/events/:eventId/matches', async (req, res) => {
+  const eventId = req.params.eventId;
+
+  try {
+    const matches = await dbAll(`
+      SELECT 
+        m.*,
+        c.name as court_name,
+        f.name as field_name,
+        mt.name as match_type_name
+      FROM matches m
+      LEFT JOIN courts c ON m.court_id = c.court_id
+      LEFT JOIN fields f ON m.field_id = f.field_id
+      LEFT JOIN match_types mt ON m.match_type_id = mt.match_type_id
+      WHERE m.event_id = ? AND (m.deleted_flag IS NULL OR m.deleted_flag = 0)
+      ORDER BY m.court_id, m.field_id, m.match_order
+    `, [eventId]);
+
+    // Get players for each match
+    for (const match of matches) {
+      const players = await dbAll(`
+        SELECT 
+          mpx.member_id,
+          mpx.team_side,
+          mpx.position_slot,
+          m.first_name,
+          m.last_name,
+          m.display_name,
+          tmx.skill_id,
+          s.name as skill_name,
+          tmx.share,
+          tmx.share_type
+        FROM match_player_xref mpx
+        JOIN members m ON mpx.member_id = m.member_id
+        LEFT JOIN team_member_xref tmx ON m.member_id = tmx.member_id
+        LEFT JOIN skills s ON tmx.skill_id = s.skill_id
+        WHERE mpx.match_id = ?
+      `, [match.match_id]);
+
+      match.team_a_players = players.filter(p => p.team_side === 'A');
+      match.team_b_players = players.filter(p => p.team_side === 'B');
+    }
+
+    res.json(matches);
+  } catch (err) {
+    sendError(res, err, 'Failed to fetch matches');
+  }
+});
+
+// Create a new match for an event
+app.post('/api/events/:eventId/matches', async (req, res) => {
+  const eventId = req.params.eventId;
+  const { court_id, field_id, match_type_id, match_order, team_a_players, team_b_players } = req.body;
+  const now = Date.now();
+  const guid = uuidv4();
+
+  try {
+    // Create the match
+    const result = await dbRun(`
+      INSERT INTO matches (guid, event_id, court_id, field_id, match_type_id, status, match_order, create_date, update_date)
+      VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?)
+    `, [guid, eventId, court_id || null, field_id || null, match_type_id || null, match_order || 1, now, now]);
+
+    const matchId = result.lastID;
+
+    // Add team A players
+    if (team_a_players && team_a_players.length > 0) {
+      for (const player of team_a_players) {
+        await dbRun(`
+          INSERT INTO match_player_xref (match_id, member_id, team_side, position_slot, create_date, update_date)
+          VALUES (?, ?, 'A', ?, ?, ?)
+        `, [matchId, player.member_id, player.position_slot || null, now, now]);
+      }
+    }
+
+    // Add team B players
+    if (team_b_players && team_b_players.length > 0) {
+      for (const player of team_b_players) {
+        await dbRun(`
+          INSERT INTO match_player_xref (match_id, member_id, team_side, position_slot, create_date, update_date)
+          VALUES (?, ?, 'B', ?, ?, ?)
+        `, [matchId, player.member_id, player.position_slot || null, now, now]);
+      }
+    }
+
+    // Calculate and update skill averages
+    await updateMatchSkillAverages(matchId);
+
+    res.json({ match_id: matchId, guid });
+  } catch (err) {
+    sendError(res, err, 'Failed to create match');
+  }
+});
+
+// Update a match (add/remove players, update positions)
+app.put('/api/matches/:matchId', async (req, res) => {
+  const matchId = req.params.matchId;
+  const { court_id, field_id, status, match_order, team_a_players, team_b_players } = req.body;
+  const now = Date.now();
+
+  try {
+    // Update match basic info
+    await dbRun(`
+      UPDATE matches 
+      SET court_id = ?, field_id = ?, status = ?, match_order = ?, update_date = ?
+      WHERE match_id = ?
+    `, [court_id || null, field_id || null, status || 'scheduled', match_order || 1, now, matchId]);
+
+    // Clear existing player assignments
+    await dbRun('DELETE FROM match_player_xref WHERE match_id = ?', [matchId]);
+
+    // Add team A players
+    if (team_a_players && team_a_players.length > 0) {
+      for (const player of team_a_players) {
+        await dbRun(`
+          INSERT INTO match_player_xref (match_id, member_id, team_side, position_slot, create_date, update_date)
+          VALUES (?, ?, 'A', ?, ?, ?)
+        `, [matchId, player.member_id, player.position_slot || null, now, now]);
+      }
+    }
+
+    // Add team B players
+    if (team_b_players && team_b_players.length > 0) {
+      for (const player of team_b_players) {
+        await dbRun(`
+          INSERT INTO match_player_xref (match_id, member_id, team_side, position_slot, create_date, update_date)
+          VALUES (?, ?, 'B', ?, ?, ?)
+        `, [matchId, player.member_id, player.position_slot || null, now, now]);
+      }
+    }
+
+    // Calculate and update skill averages
+    await updateMatchSkillAverages(matchId);
+
+    res.json({ success: true, match_id: matchId });
+  } catch (err) {
+    sendError(res, err, 'Failed to update match');
+  }
+});
+
+// Delete a match
+app.delete('/api/matches/:matchId', async (req, res) => {
+  const matchId = req.params.matchId;
+
+  try {
+    await dbRun('DELETE FROM match_player_xref WHERE match_id = ?', [matchId]);
+    await dbRun('DELETE FROM matches WHERE match_id = ?', [matchId]);
+    res.json({ success: true });
+  } catch (err) {
+    sendError(res, err, 'Failed to delete match');
+  }
+});
+
+// Add single player to a match
+app.post('/api/matches/:matchId/players', async (req, res) => {
+  const matchId = req.params.matchId;
+  const { member_id, team_side, position_slot } = req.body;
+  const now = Date.now();
+
+  try {
+    // Check if player already in this match
+    const existing = await dbGet(
+      'SELECT * FROM match_player_xref WHERE match_id = ? AND member_id = ?',
+      [matchId, member_id]
+    );
+
+    if (existing) {
+      // Update existing assignment
+      await dbRun(`
+        UPDATE match_player_xref 
+        SET team_side = ?, position_slot = ?, update_date = ?
+        WHERE match_id = ? AND member_id = ?
+      `, [team_side, position_slot || null, now, matchId, member_id]);
+    } else {
+      // Create new assignment
+      await dbRun(`
+        INSERT INTO match_player_xref (match_id, member_id, team_side, position_slot, create_date, update_date)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [matchId, member_id, team_side, position_slot || null, now, now]);
+    }
+
+    // Update skill averages
+    await updateMatchSkillAverages(matchId);
+
+    res.json({ success: true });
+  } catch (err) {
+    sendError(res, err, 'Failed to add player to match');
+  }
+});
+
+// Remove player from a match
+app.delete('/api/matches/:matchId/players/:memberId', async (req, res) => {
+  const { matchId, memberId } = req.params;
+
+  try {
+    await dbRun(
+      'DELETE FROM match_player_xref WHERE match_id = ? AND member_id = ?',
+      [matchId, memberId]
+    );
+
+    // Update skill averages
+    await updateMatchSkillAverages(matchId);
+
+    res.json({ success: true });
+  } catch (err) {
+    sendError(res, err, 'Failed to remove player from match');
+  }
+});
+
+// Helper function to calculate and update skill averages for a match
+async function updateMatchSkillAverages(matchId) {
+  const players = await dbAll(`
+    SELECT 
+      mpx.team_side,
+      s.sort_order as skill_value
+    FROM match_player_xref mpx
+    JOIN members m ON mpx.member_id = m.member_id
+    LEFT JOIN team_member_xref tmx ON m.member_id = tmx.member_id
+    LEFT JOIN skills s ON tmx.skill_id = s.skill_id
+    WHERE mpx.match_id = ?
+  `, [matchId]);
+
+  const teamA = players.filter(p => p.team_side === 'A' && p.skill_value != null);
+  const teamB = players.filter(p => p.team_side === 'B' && p.skill_value != null);
+
+  const avgA = teamA.length > 0 ? teamA.reduce((sum, p) => sum + p.skill_value, 0) / teamA.length : null;
+  const avgB = teamB.length > 0 ? teamB.reduce((sum, p) => sum + p.skill_value, 0) / teamB.length : null;
+
+  await dbRun(`
+    UPDATE matches 
+    SET team_a_skill_avg = ?, team_b_skill_avg = ?, update_date = ?
+    WHERE match_id = ?
+  `, [avgA, avgB, Date.now(), matchId]);
+}
+
+// Save all matches for an event (bulk operation)
+app.post('/api/events/:eventId/matches/bulk', async (req, res) => {
+  const eventId = req.params.eventId;
+  const { matches } = req.body;
+  const now = Date.now();
+
+  try {
+    // Delete existing matches for this event
+    await dbRun('DELETE FROM match_player_xref WHERE match_id IN (SELECT match_id FROM matches WHERE event_id = ?)', [eventId]);
+    await dbRun('DELETE FROM matches WHERE event_id = ?', [eventId]);
+
+    // Create new matches
+    for (const match of matches) {
+      const guid = uuidv4();
+      const result = await dbRun(`
+        INSERT INTO matches (guid, event_id, court_id, field_id, match_type_id, status, match_order, create_date, update_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [guid, eventId, match.court_id || null, match.field_id || null, match.match_type_id || null,
+        match.status || 'scheduled', match.match_order || 1, now, now]);
+
+      const matchId = result.lastID;
+
+      // Add players
+      if (match.team_a_players) {
+        for (const player of match.team_a_players) {
+          await dbRun(`
+            INSERT INTO match_player_xref (match_id, member_id, team_side, position_slot, create_date, update_date)
+            VALUES (?, ?, 'A', ?, ?, ?)
+          `, [matchId, player.member_id, player.position_slot || null, now, now]);
+        }
+      }
+      if (match.team_b_players) {
+        for (const player of match.team_b_players) {
+          await dbRun(`
+            INSERT INTO match_player_xref (match_id, member_id, team_side, position_slot, create_date, update_date)
+            VALUES (?, ?, 'B', ?, ?, ?)
+          `, [matchId, player.member_id, player.position_slot || null, now, now]);
+        }
+      }
+
+      await updateMatchSkillAverages(matchId);
+    }
+
+    res.json({ success: true, count: matches.length });
+  } catch (err) {
+    sendError(res, err, 'Failed to save matches');
+  }
 });
 
 // Graceful shutdown
