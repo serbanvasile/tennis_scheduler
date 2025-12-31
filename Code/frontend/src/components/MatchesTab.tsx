@@ -264,18 +264,32 @@ export function MatchesTab({
         setEligiblePlayers(eligible);
     }, [memberIds, members, teamIds, teams, matchTypes, matchTypeIds, ageGroupIds, genderIds, levelIds, genders]);
 
-    // Initialize/Sync Matches
+    // Track the last loaded eventId to avoid re-fetching
+    const lastLoadedEventIdRef = React.useRef<string | number | null>(null);
+
+    // Single unified effect: handles both DB loading and court syncing
     useEffect(() => {
-        setMatches(currentMatches => {
-            const newMatches = [...currentMatches];
-            const existingCourtIds = new Set(newMatches.filter(m => m.court_id).map(m => m.court_id));
-            const existingFieldIds = new Set(newMatches.filter(m => m.field_id).map(m => m.field_id));
-            let matchesChanged = false;
+        const safeCourtIds = courtIds.map(String);
+        const safeFieldIds = fieldIds.map(String);
+
+        // Sync function that filters and adds courts
+        const syncMatchesWithCourts = (baseMatches: EventMatch[]): EventMatch[] => {
+            // Filter to only keep matches for selected courts/fields
+            const validMatches = baseMatches.filter(m => {
+                if (m.court_id) return safeCourtIds.includes(String(m.court_id));
+                if (m.field_id) return safeFieldIds.includes(String(m.field_id));
+                return false;
+            });
+
+            const existingCourtIds = new Set(validMatches.filter(m => m.court_id).map(m => String(m.court_id)));
+            const existingFieldIds = new Set(validMatches.filter(m => m.field_id).map(m => String(m.field_id)));
+
+            const result = [...validMatches];
 
             // Add new courts
             courtIds.forEach((courtId, index) => {
-                if (!existingCourtIds.has(courtId)) {
-                    newMatches.push({
+                if (!existingCourtIds.has(String(courtId))) {
+                    result.push({
                         match_id: `court_${courtId}`,
                         event_id: eventId || 'new',
                         court_id: courtId,
@@ -284,14 +298,13 @@ export function MatchesTab({
                         team_b_players: [],
                         match_order: index + 1,
                     });
-                    matchesChanged = true;
                 }
             });
 
             // Add new fields
             fieldIds.forEach((fieldId, index) => {
-                if (!existingFieldIds.has(fieldId)) {
-                    newMatches.push({
+                if (!existingFieldIds.has(String(fieldId))) {
+                    result.push({
                         match_id: `field_${fieldId}`,
                         event_id: eventId || 'new',
                         field_id: fieldId,
@@ -300,41 +313,50 @@ export function MatchesTab({
                         team_b_players: [],
                         match_order: courtIds.length + index + 1,
                     });
-                    matchesChanged = true;
                 }
             });
 
-            // Remove unused
-            const filtered = newMatches.filter(m => {
-                if (m.court_id) return courtIds.includes(m.court_id);
-                if (m.field_id) return fieldIds.includes(m.field_id);
-                return false;
-            });
-
-            if (filtered.length !== newMatches.length) matchesChanged = true;
-
-            return matchesChanged ? filtered : currentMatches;
-        });
-    }, [courtIds.join(','), fieldIds.join(','), eventId]);
-
-    // Load matches from DB
-    useEffect(() => {
-        if (!eventId) return;
-        const loadMatches = async () => {
-            setLoading(true);
-            try {
-                const savedMatches = await databaseService.getEventMatches(eventId);
-                if (savedMatches.length > 0) {
-                    setMatches(savedMatches);
-                }
-            } catch (error) {
-                console.error('Failed to load matches:', error);
-            } finally {
-                setLoading(false);
-            }
+            return result;
         };
-        loadMatches();
-    }, [eventId]);
+
+        // If editing an existing event and we haven't loaded this event yet
+        if (eventId && lastLoadedEventIdRef.current !== eventId) {
+            lastLoadedEventIdRef.current = eventId;
+            setLoading(true);
+            databaseService.getEventMatches(eventId)
+                .then(savedMatches => {
+                    const synced = syncMatchesWithCourts(savedMatches);
+                    setMatches(synced);
+                })
+                .catch(error => {
+                    console.error('Failed to load matches:', error);
+                    setMatches(syncMatchesWithCourts([]));
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        } else {
+            // Either new event OR courtIds changed - sync existing matches
+            setMatches(currentMatches => {
+                const synced = syncMatchesWithCourts(currentMatches);
+
+                // Only update if something actually changed
+                if (synced.length !== currentMatches.length) {
+                    return synced;
+                }
+
+                // Check for court/field changes
+                const hasChanges = synced.some((m, i) => {
+                    const curr = currentMatches[i];
+                    if (!curr) return true;
+                    return String(m.court_id || '') !== String(curr.court_id || '') ||
+                        String(m.field_id || '') !== String(curr.field_id || '');
+                });
+
+                return hasChanges ? synced : currentMatches;
+            });
+        }
+    }, [courtIds.join(','), fieldIds.join(','), eventId]);
 
     // Notify parent
     useEffect(() => {

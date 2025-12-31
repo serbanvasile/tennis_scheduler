@@ -1218,7 +1218,12 @@ export default function CalendarScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modeButton, { borderColor: theme.colors.border }, courtSelectionMode === 'count' && { backgroundColor: theme.colors.primary }]}
-                  onPress={() => setCourtSelectionMode('count')}
+                  onPress={() => {
+                    setCourtSelectionMode('count');
+                    // Update courtIds based on current court count
+                    const count = Math.min(parseInt(courtCount) || 0, availableCourts.length);
+                    setFormState(prev => ({ ...prev, courtIds: availableCourts.slice(0, count).map(c => c.court_id) }));
+                  }}
                 >
                   <Text style={[styles.modeButtonText, { color: theme.colors.text }, courtSelectionMode === 'count' && { color: theme.colors.buttonText }]}>Number</Text>
                 </TouchableOpacity>
