@@ -585,6 +585,11 @@ export function MatchesTab({
                                                 <Text style={[styles.playerName, { color: theme.colors.text, textAlign: 'center' }]}>
                                                     {richPlayer?.display_name || richPlayer ? `${richPlayer?.first_name} ${richPlayer?.last_name}` : player.display_name}
                                                 </Text>
+                                                {richPlayer?.teamName && (
+                                                    <Text style={{ color: theme.colors.muted, fontSize: 11, textAlign: 'center', marginBottom: 2 }}>
+                                                        {richPlayer.teamName}
+                                                    </Text>
+                                                )}
                                                 <View style={styles.playerBadges}>
                                                     {displaySkill && (
                                                         <View style={[styles.pill, { backgroundColor: `${String(theme.colors.primary)}20`, marginRight: 4 }]}>
@@ -654,6 +659,11 @@ export function MatchesTab({
                                                 <Text style={[styles.playerName, { color: theme.colors.text, textAlign: 'center' }]}>
                                                     {richPlayer?.display_name || richPlayer ? `${richPlayer?.first_name} ${richPlayer?.last_name}` : player.display_name}
                                                 </Text>
+                                                {richPlayer?.teamName && (
+                                                    <Text style={{ color: theme.colors.muted, fontSize: 11, textAlign: 'center', marginBottom: 2 }}>
+                                                        {richPlayer.teamName}
+                                                    </Text>
+                                                )}
                                                 <View style={styles.playerBadges}>
                                                     {displaySkill && (
                                                         <View style={[styles.pill, { backgroundColor: `${String(theme.colors.error)}20`, marginRight: 4 }]}>

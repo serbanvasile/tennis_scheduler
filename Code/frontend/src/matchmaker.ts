@@ -435,13 +435,14 @@ export interface AutoMatchPlayer {
 }
 
 /**
- * Generates matches automatically based on contract share and skill.
+ * Generates matches automatically based on contract share, skill, and team affiliation.
  * 
  * Algorithm:
  * 1. Identify empty slots in the provided matches.
- * 2. Sort eligible players by Contract Share (descending).
- * 3. Fill slots greedily, but try to balance skills within each match if possible (basic pairing).
- * 4. Reshuffle simply for now - advanced optimization can be added later.
+ * 2. Check if we have multiple teams - if so, separate players by team for inter-team competition.
+ * 3. Sort eligible players by skill (descending), then contract share (descending) for tiebreaking.
+ * 4. Fill slots ensuring players from different teams face each other when possible.
+ * 5. Balance skills within each match.
  */
 export function generateAutoMatches(
   eligiblePlayers: AutoMatchPlayer[],
@@ -462,6 +463,118 @@ export function generateAutoMatches(
     return isNaN(val) ? 0 : val;
   };
 
+  // Check if we have multiple teams
+  const uniqueTeamIds = [...new Set(eligiblePlayers.map(p => String(p.teamId || 'none')))].filter(t => t !== 'none');
+  const hasMultipleTeams = uniqueTeamIds.length > 1;
+
+  if (hasMultipleTeams) {
+    // INTER-TEAM MODE: Each match has one team on Team A side, another team on Team B side
+    // All players on the same side of a court must be from the same team
+
+    // Track which players have been assigned globally
+    const assignedPlayerIds = new Set<string>();
+
+    // Group players by team (each player only in one team - first match wins)
+    const playersByTeam: Record<string, AutoMatchPlayer[]> = {};
+
+    for (const player of eligiblePlayers) {
+      const playerId = String(player.member_id);
+      if (assignedPlayerIds.has(playerId)) continue;
+
+      const teamKey = String(player.teamId || 'none');
+      if (teamKey === 'none') continue;
+
+      if (!playersByTeam[teamKey]) {
+        playersByTeam[teamKey] = [];
+      }
+      playersByTeam[teamKey].push(player);
+      assignedPlayerIds.add(playerId);
+    }
+
+    // Shuffle each team's players for variety
+    for (const teamKey of Object.keys(playersByTeam)) {
+      playersByTeam[teamKey].sort(() => Math.random() - 0.5);
+    }
+
+    // Create team pairings for matches (round-robin style)
+    const teamIds = Object.keys(playersByTeam);
+    const teamPairings: [string, string][] = [];
+
+    // Generate all possible team-vs-team pairings
+    for (let i = 0; i < teamIds.length; i++) {
+      for (let j = i + 1; j < teamIds.length; j++) {
+        teamPairings.push([teamIds[i], teamIds[j]]);
+      }
+    }
+
+    // Shuffle pairings for variety
+    teamPairings.sort(() => Math.random() - 0.5);
+
+    // Track usage index for each team's player pool
+    const teamPlayerIndex: Record<string, number> = {};
+    for (const teamKey of teamIds) {
+      teamPlayerIndex[teamKey] = 0;
+    }
+
+    let pairingIndex = 0;
+
+    // Fill matches
+    for (const match of updatedMatches) {
+      if (!match.team_a_players) match.team_a_players = [];
+      if (!match.team_b_players) match.team_b_players = [];
+
+      // Get next team pairing (cycle through pairings)
+      const [teamAId, teamBId] = teamPairings[pairingIndex % teamPairings.length];
+      pairingIndex++;
+
+      const teamAPlayers = playersByTeam[teamAId] || [];
+      const teamBPlayers = playersByTeam[teamBId] || [];
+
+      // Fill Team A positions with players from teamAId
+      for (let slot = 0; slot < positionsA.length; slot++) {
+        const playerIdx = teamPlayerIndex[teamAId];
+        if (playerIdx < teamAPlayers.length) {
+          const player = teamAPlayers[playerIdx];
+          teamPlayerIndex[teamAId]++;
+
+          const slotId = positionsA[slot]?.id;
+          match.team_a_players.push({
+            member_id: player.member_id,
+            team_side: 'A',
+            position_slot: slotId,
+            first_name: player.first_name,
+            last_name: player.last_name,
+            display_name: player.display_name,
+            skill_name: player.skillLevel,
+          });
+        }
+      }
+
+      // Fill Team B positions with players from teamBId
+      for (let slot = 0; slot < positionsB.length; slot++) {
+        const playerIdx = teamPlayerIndex[teamBId];
+        if (playerIdx < teamBPlayers.length) {
+          const player = teamBPlayers[playerIdx];
+          teamPlayerIndex[teamBId]++;
+
+          const slotId = positionsB[slot]?.id;
+          match.team_b_players.push({
+            member_id: player.member_id,
+            team_side: 'B',
+            position_slot: slotId,
+            first_name: player.first_name,
+            last_name: player.last_name,
+            display_name: player.display_name,
+            skill_name: player.skillLevel,
+          });
+        }
+      }
+    }
+
+    return updatedMatches;
+  }
+
+  // INTRA-TEAM MODE (original algorithm): Skill-balanced pairing when all players from same team
   // Sort players by skill descending, then by share descending (for tiebreaking)
   const sortedBySkill = [...eligiblePlayers].sort((a, b) => {
     const skillDiff = getSkillValue(b) - getSkillValue(a);
